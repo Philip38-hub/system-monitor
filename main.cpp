@@ -55,6 +55,37 @@ void systemWindow(const char *id, ImVec2 size, ImVec2 position)
     ImGui::Text("Total Processes: %d", getTotalProcesses());
     ImGui::Text("CPU Type: %s", CPUinfo().c_str());
 
+    static bool plot_paused = false;
+    static float history_fps = 60.0f;
+    static float history_scale = 1.0f;
+
+    ImGui::Checkbox("Pause Plot", &plot_paused);
+    ImGui::SliderFloat("Plot FPS", &history_fps, 1.0f, 120.0f, "%.0f FPS");
+    ImGui::SliderFloat("Plot Y-Scale", &history_scale, 0.1f, 2.0f, "%.1f");
+
+    if (ImGui::BeginTabBar("SystemTabs"))
+    {
+        if (ImGui::BeginTabItem("CPU"))
+        {
+            // student TODO: CPU graph and overlay
+            ImGui::Text("CPU Information and Graph Here");
+            ImGui::EndTabItem();
+        }
+        if (ImGui::BeginTabItem("Fan"))
+        {
+            // student TODO: Fan information and graph
+            ImGui::Text("Fan Information and Graph Here");
+            ImGui::EndTabItem();
+        }
+        if (ImGui::BeginTabItem("Thermal"))
+        {
+            // student TODO: Thermal information and graph
+            ImGui::Text("Thermal Information and Graph Here");
+            ImGui::EndTabItem();
+        }
+        ImGui::EndTabBar();
+    }
+
     ImGui::End();
 }
 
