@@ -1,4 +1,5 @@
 #include "header.h"
+#include <cctype> // For isdigit
 
 // get cpu id and information, you can use `proc/cpuinfo`
 string CPUinfo()
@@ -48,4 +49,66 @@ const char *getOsName()
 #else
     return "Other";
 #endif
+}
+
+// getLoggedInUser, this will get the currently logged in user
+string getLoggedInUser()
+{
+    char user[LOGIN_NAME_MAX];
+    if (getlogin_r(user, sizeof(user)) == 0)
+    {
+        return string(user);
+    }
+    return "Unknown";
+}
+
+// getHostname, this will get the hostname of the computer
+string getHostname()
+{
+    char hostname[HOST_NAME_MAX];
+    if (gethostname(hostname, sizeof(hostname)) == 0)
+    {
+        return string(hostname);
+    }
+    return "Unknown";
+}
+
+// getTotalProcesses, this will get the total number of processes
+int getTotalProcesses()
+{
+    int count = 0;
+    DIR *dir;
+    struct dirent *ent;
+
+    // Open the /proc directory
+    if ((dir = opendir("/proc")) == NULL)
+    {
+        perror("opendir");
+        return -1;
+    }
+
+    // Iterate over all entries in /proc
+    while ((ent = readdir(dir)) != NULL)
+    {
+        // Check if the entry is a directory and its name consists only of digits (PIDs)
+        if (ent->d_type == DT_DIR)
+        {
+            bool is_pid = true;
+            for (char *p = ent->d_name; *p; ++p)
+            {
+                if (!isdigit(*p))
+                {
+                    is_pid = false;
+                    break;
+                }
+            }
+            if (is_pid)
+            {
+                count++;
+            }
+        }
+    }
+
+    closedir(dir);
+    return count;
 }

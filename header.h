@@ -99,6 +99,9 @@ struct RX
 // student TODO : system stats
 string CPUinfo();
 const char *getOsName();
+string getLoggedInUser();
+string getHostname();
+int getTotalProcesses();
 
 // student TODO : memory and processes
 
