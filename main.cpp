@@ -68,7 +68,8 @@ void systemWindow(const char *id, ImVec2 size, ImVec2 position)
         if (ImGui::BeginTabItem("CPU"))
         {
             // student TODO: CPU graph and overlay
-            ImGui::Text("CPU Information and Graph Here");
+            ImGui::PlotLines("##CPU", cpu_history.values.data(), cpu_history.values.size(), cpu_history.offset,
+                             cpu_history.overlay_text.c_str(), 0.0f, 100.0f * history_scale, ImVec2(0, 80));
             ImGui::EndTabItem();
         }
         if (ImGui::BeginTabItem("Fan"))
@@ -183,6 +184,10 @@ int main(int, char **)
     // note : you are free to change the style of the application
     ImVec4 clear_color = ImVec4(0.0f, 0.0f, 0.0f, 0.0f);
 
+    // History data for plots
+    HistoryData cpu_history;
+    cpu_history.color = ImVec4(0.0f, 1.0f, 0.0f, 1.0f); // Green for CPU
+
     // Main loop
     bool done = false;
     while (!done)
@@ -221,6 +226,14 @@ int main(int, char **)
                           ImVec2(mainDisplay.x - 20, (mainDisplay.y / 2) - 60),
                           ImVec2(10, (mainDisplay.y / 2) + 50));
         }
+
+        // Update CPU history
+        if (!plot_paused)
+        {
+            cpu_history.addValue(getCPUUsage());
+        }
+        cpu_history.overlay_text = to_string((int)cpu_history.values[cpu_history.offset == 0 ? cpu_history.values.size() - 1 : cpu_history.offset - 1]) + "%";
+
 
         // Rendering
         ImGui::Render();

@@ -112,3 +112,56 @@ int getTotalProcesses()
     closedir(dir);
     return count;
 }
+
+// Function to get CPU usage percentage
+float getCPUUsage()
+{
+    static long long lastTotalUser = 0;
+    static long long lastTotalUserNice = 0;
+    static long long lastTotalSystem = 0;
+    static long long lastTotalIdle = 0;
+    static long long lastTotalIowait = 0;
+    static long long lastTotalIrq = 0;
+    static long long lastTotalSoftirq = 0;
+    static long long lastTotalSteal = 0;
+    static long long lastTotalGuest = 0;
+    static long long lastTotalGuestNice = 0;
+    static long long lastTotalNonIdle = 0; // Corrected: Added this static variable
+
+    long long user, nice, system, idle, iowait, irq, softirq, steal, guest, guestNice;
+    ifstream file("/proc/stat");
+    string line;
+    if (getline(file, line))
+    {
+        sscanf(line.c_str(), "cpu %lld %lld %lld %lld %lld %lld %lld %lld %lld %lld",
+               &user, &nice, &system, &idle, &iowait, &irq, &softirq, &steal, &guest, &guestNice);
+    }
+    file.close();
+
+    long long totalIdle = idle + iowait;
+    long long totalNonIdle = user + nice + system + irq + softirq + steal + guest + guestNice;
+    long long total = totalIdle + totalNonIdle;
+
+    long long diffIdle = totalIdle - lastTotalIdle;
+    long long diffTotal = total - (lastTotalIdle + lastTotalNonIdle); // Corrected: Used lastTotalNonIdle
+
+    float cpu_usage = 0.0f;
+    if (diffTotal != 0)
+    {
+        cpu_usage = (float)(totalNonIdle - lastTotalNonIdle) / (float)diffTotal * 100.0f;
+    }
+
+    lastTotalUser = user;
+    lastTotalUserNice = nice;
+    lastTotalSystem = system;
+    lastTotalIdle = idle;
+    lastTotalIowait = iowait;
+    lastTotalIrq = irq;
+    lastTotalSoftirq = softirq;
+    lastTotalSteal = steal;
+    lastTotalGuest = guest;
+    lastTotalGuestNice = guestNice;
+    lastTotalNonIdle = totalNonIdle; // Corrected: Updated lastTotalNonIdle
+
+    return cpu_usage;
+}

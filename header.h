@@ -103,6 +103,34 @@ string getLoggedInUser();
 string getHostname();
 int getTotalProcesses();
 
+struct HistoryData
+{
+    vector<float> values;
+    int offset;
+    float max_value;
+    float min_value;
+    ImVec4 color;
+    string overlay_text;
+
+    HistoryData() : offset(0), max_value(0.0f), min_value(0.0f), color(1.0f, 1.0f, 1.0f, 1.0f) {}
+
+    void addValue(float val)
+    {
+        if (values.empty())
+        {
+            values.resize(90); // Default history size
+            max_value = val;
+            min_value = val;
+        }
+        values[offset] = val;
+        offset = (offset + 1) % values.size();
+        max_value = fmax(max_value, val);
+        min_value = fmin(min_value, val);
+    }
+};
+
+float getCPUUsage();
+
 // student TODO : memory and processes
 
 // student TODO : network
