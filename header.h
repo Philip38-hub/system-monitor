@@ -135,6 +135,9 @@ float getFanSpeed();
 float getCPUTemperature();
 
 // student TODO : memory and processes
+float getMemoryUsage();
+float getSwapUsage();
+float getDiskUsage();
 
 // student TODO : network
 

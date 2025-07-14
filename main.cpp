@@ -103,6 +103,14 @@ void memoryProcessesWindow(const char *id, ImVec2 size, ImVec2 position)
     ImGui::SetWindowPos(id, position);
 
     // student TODO : add code here for the memory and process information
+    ImGui::Text("Physical Memory (RAM) Usage: %.1f%%", getMemoryUsage());
+    ImGui::ProgressBar(getMemoryUsage() / 100.0f, ImVec2(0.0f, 0.0f));
+
+    ImGui::Text("Virtual Memory (SWAP) Usage: %.1f%%", getSwapUsage());
+    ImGui::ProgressBar(getSwapUsage() / 100.0f, ImVec2(0.0f, 0.0f));
+
+    ImGui::Text("Disk Usage: %.1f%%", getDiskUsage());
+    ImGui::ProgressBar(getDiskUsage() / 100.0f, ImVec2(0.0f, 0.0f));
 
     ImGui::End();
 }
