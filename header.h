@@ -138,6 +138,7 @@ float getCPUTemperature();
 float getMemoryUsage();
 float getSwapUsage();
 float getDiskUsage();
+vector<Proc> getAllProcesses();
 
 // student TODO : network
 
