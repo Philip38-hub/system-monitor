@@ -165,3 +165,61 @@ float getCPUUsage()
 
     return cpu_usage;
 }
+
+// Function to get fan status (e.g., "active", "inactive")
+// Note: Fan status is typically found in /sys, not /proc.
+// This implementation attempts to read from a common /sys path.
+string getFanStatus()
+{
+    ifstream file("/sys/class/hwmon/hwmon0/fan1_input"); // Example path, may vary
+    if (file.is_open())
+    {
+        // If we can read fan speed, assume it's active.
+        // A more robust solution would check specific status files if available.
+        return "Active";
+    }
+    return "Inactive";
+}
+
+// Function to get fan speed (RPM)
+// Note: Fan speed is typically found in /sys, not /proc.
+// This implementation attempts to read from a common /sys path.
+float getFanSpeed()
+{
+    ifstream file("/sys/class/hwmon/hwmon0/fan1_input"); // Example path, may vary
+    string line;
+    if (file.is_open() && getline(file, line))
+    {
+        try
+        {
+            return stof(line);
+        }
+        catch (const std::exception &e)
+        {
+            // Handle conversion error
+        }
+    }
+    return 0.0f; // Default to 0 if not found or error
+}
+
+// Function to get CPU temperature (Celsius)
+// Note: CPU temperature is typically found in /sys, not /proc.
+// This implementation attempts to read from a common /sys path.
+float getCPUTemperature()
+{
+    ifstream file("/sys/class/thermal/thermal_zone0/temp"); // Example path, may vary
+    string line;
+    if (file.is_open() && getline(file, line))
+    {
+        try
+        {
+            // Temperature is usually in millidegrees Celsius, so divide by 1000
+            return stof(line) / 1000.0f;
+        }
+        catch (const std::exception &e)
+        {
+            // Handle conversion error
+        }
+    }
+    return 0.0f; // Default to 0 if not found or error
+}

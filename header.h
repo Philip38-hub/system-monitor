@@ -130,6 +130,9 @@ struct HistoryData
 };
 
 float getCPUUsage();
+string getFanStatus();
+float getFanSpeed();
+float getCPUTemperature();
 
 // student TODO : memory and processes
 

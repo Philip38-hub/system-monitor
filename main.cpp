@@ -75,13 +75,18 @@ void systemWindow(const char *id, ImVec2 size, ImVec2 position)
         if (ImGui::BeginTabItem("Fan"))
         {
             // student TODO: Fan information and graph
-            ImGui::Text("Fan Information and Graph Here");
+            ImGui::Text("Status: %s", getFanStatus().c_str());
+            ImGui::Text("Speed: %.0f RPM", getFanSpeed());
+            ImGui::PlotLines("##Fan", fan_history.values.data(), fan_history.values.size(), fan_history.offset,
+                             fan_history.overlay_text.c_str(), 0.0f, fan_history.max_value * history_scale, ImVec2(0, 80));
             ImGui::EndTabItem();
         }
         if (ImGui::BeginTabItem("Thermal"))
         {
             // student TODO: Thermal information and graph
-            ImGui::Text("Thermal Information and Graph Here");
+            ImGui::Text("Temperature: %.1f C", getCPUTemperature());
+            ImGui::PlotLines("##Thermal", thermal_history.values.data(), thermal_history.values.size(), thermal_history.offset,
+                             thermal_history.overlay_text.c_str(), 0.0f, thermal_history.max_value * history_scale, ImVec2(0, 80));
             ImGui::EndTabItem();
         }
         ImGui::EndTabBar();
@@ -188,6 +193,12 @@ int main(int, char **)
     HistoryData cpu_history;
     cpu_history.color = ImVec4(0.0f, 1.0f, 0.0f, 1.0f); // Green for CPU
 
+    HistoryData fan_history;
+    fan_history.color = ImVec4(0.0f, 0.5f, 1.0f, 1.0f); // Blue for Fan
+
+    HistoryData thermal_history;
+    thermal_history.color = ImVec4(1.0f, 0.0f, 0.0f, 1.0f); // Red for Thermal
+
     // Main loop
     bool done = false;
     while (!done)
@@ -227,12 +238,16 @@ int main(int, char **)
                           ImVec2(10, (mainDisplay.y / 2) + 50));
         }
 
-        // Update CPU history
+        // Update history data
         if (!plot_paused)
         {
             cpu_history.addValue(getCPUUsage());
+            fan_history.addValue(getFanSpeed());
+            thermal_history.addValue(getCPUTemperature());
         }
         cpu_history.overlay_text = to_string((int)cpu_history.values[cpu_history.offset == 0 ? cpu_history.values.size() - 1 : cpu_history.offset - 1]) + "%";
+        fan_history.overlay_text = to_string((int)fan_history.values[fan_history.offset == 0 ? fan_history.values.size() - 1 : fan_history.offset - 1]) + " RPM";
+        thermal_history.overlay_text = to_string((int)thermal_history.values[thermal_history.offset == 0 ? thermal_history.values.size() - 1 : thermal_history.offset - 1]) + " C";
 
 
         // Rendering
