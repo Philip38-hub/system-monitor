@@ -41,12 +41,8 @@ NetworkUsage getNetworkUsage() {
     }
     
     // Calculate deltas
-    if (lastRxBytes > 0) {
-        usage.rxRate = (totalRxBytes - lastRxBytes) / 1024.0f / 1024.0f; // Convert to MB/s
-    }
-    if (lastTxBytes > 0) {
-        usage.txRate = (totalTxBytes - lastTxBytes) / 1024.0f / 1024.0f; // Convert to MB/s
-    }
+    usage.rxRate = (totalRxBytes - lastRxBytes) / 1024.0f / 1024.0f; // Convert to MB/s
+    usage.txRate = (totalTxBytes - lastTxBytes) / 1024.0f / 1024.0f; // Convert to MB/s
     
     lastRxBytes = totalRxBytes;
     lastTxBytes = totalTxBytes;
@@ -119,8 +115,9 @@ map<string, TX> getTXStats() {
         interface.erase(interface.find_last_not_of(" \t") + 1);
 
         // Skip RX stats
-        int dummy;
-        for (int i = 0; i < 8; i++) {
+        // Skip RX stats (8 fields)
+        string dummy;
+        for (int i = 0; i < 8; ++i) {
             iss >> dummy;
         }
 

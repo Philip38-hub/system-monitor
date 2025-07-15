@@ -143,7 +143,7 @@ float getCPUUsage()
     long long total = totalIdle + totalNonIdle;
 
     long long diffIdle = totalIdle - lastTotalIdle;
-    long long diffTotal = total - (lastTotalIdle + lastTotalNonIdle); // Corrected: Used lastTotalNonIdle
+    long long diffTotal = total - (lastTotalIdle + lastTotalNonIdle);
 
     float cpu_usage = 0.0f;
     if (diffTotal != 0)
@@ -154,7 +154,7 @@ float getCPUUsage()
     lastTotalUser = user;
     lastTotalUserNice = nice;
     lastTotalSystem = system;
-    lastTotalIdle = idle;
+    lastTotalIdle = totalIdle;
     lastTotalIowait = iowait;
     lastTotalIrq = irq;
     lastTotalSoftirq = softirq;
@@ -171,12 +171,15 @@ float getCPUUsage()
 // This implementation attempts to read from a common /sys path.
 string getFanStatus()
 {
-    ifstream file("/sys/class/hwmon/hwmon0/fan1_input"); // Example path, may vary
-    if (file.is_open())
-    {
-        // If we can read fan speed, assume it's active.
-        // A more robust solution would check specific status files if available.
-        return "Active";
+    // Scan for all available fan inputs and return "Active" if any are found
+    for (int i = 0; i < 10; ++i) { // Check up to 10 hwmon devices
+        for (int j = 1; j < 10; ++j) { // Check up to 9 fan inputs per device
+            string path = "/sys/class/hwmon/hwmon" + to_string(i) + "/fan" + to_string(j) + "_input";
+            ifstream file(path);
+            if (file.is_open()) {
+                return "Active";
+            }
+        }
     }
     return "Inactive";
 }
@@ -186,20 +189,22 @@ string getFanStatus()
 // This implementation attempts to read from a common /sys path.
 float getFanSpeed()
 {
-    ifstream file("/sys/class/hwmon/hwmon0/fan1_input"); // Example path, may vary
-    string line;
-    if (file.is_open() && getline(file, line))
-    {
-        try
-        {
-            return stof(line);
-        }
-        catch (const std::exception &e)
-        {
-            // Handle conversion error
+    // Scan for the first available fan speed
+    for (int i = 0; i < 10; ++i) {
+        for (int j = 1; j < 10; ++j) {
+            string path = "/sys/class/hwmon/hwmon" + to_string(i) + "/fan" + to_string(j) + "_input";
+            ifstream file(path);
+            string line;
+            if (file.is_open() && getline(file, line)) {
+                try {
+                    return stof(line);
+                } catch (const std::exception &e) {
+                    // Ignore conversion errors and continue scanning
+                }
+            }
         }
     }
-    return 0.0f; // Default to 0 if not found or error
+    return 0.0f; // Default if no fan speed is found
 }
 
 // Function to get CPU temperature (Celsius)
@@ -207,19 +212,18 @@ float getFanSpeed()
 // This implementation attempts to read from a common /sys path.
 float getCPUTemperature()
 {
-    ifstream file("/sys/class/thermal/thermal_zone0/temp"); // Example path, may vary
-    string line;
-    if (file.is_open() && getline(file, line))
-    {
-        try
-        {
-            // Temperature is usually in millidegrees Celsius, so divide by 1000
-            return stof(line) / 1000.0f;
-        }
-        catch (const std::exception &e)
-        {
-            // Handle conversion error
+    // Scan for the first available temperature sensor
+    for (int i = 0; i < 10; ++i) { // Check up to 10 thermal zones
+        string path = "/sys/class/thermal/thermal_zone" + to_string(i) + "/temp";
+        ifstream file(path);
+        string line;
+        if (file.is_open() && getline(file, line)) {
+            try {
+                return stof(line) / 1000.0f;
+            } catch (const std::exception &e) {
+                // Ignore conversion errors and continue scanning
+            }
         }
     }
-    return 0.0f; // Default to 0 if not found or error
+    return 0.0f; // Default if no temperature is found
 }
