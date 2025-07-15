@@ -104,7 +104,7 @@ vector<Proc> getAllProcesses()
 
                     // Parse /proc/[pid]/stat
                     // Example: 1 (systemd) S 0 1 1 0 -1 4194304 1000 0 0 0 0 0 0 0 20 0 1 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
-                    char comm[256];
+                    // char comm[256];
                     char state_char;
                     unsigned long vsize_ul, rss_ul, utime_ul, stime_ul;
 
@@ -183,7 +183,7 @@ float getDiskUsage()
 
     unsigned long long totalBlocks = stat.f_blocks;
     unsigned long long freeBlocks = stat.f_bfree;
-    unsigned long long availableBlocks = stat.f_bavail; // Blocks available to non-privileged user
+    // unsigned long long availableBlocks = stat.f_bavail; // Blocks available to non-privileged user
 
     unsigned long long totalSpace = totalBlocks * stat.f_bsize;
     unsigned long long freeSpace = freeBlocks * stat.f_bsize;

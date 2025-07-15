@@ -172,7 +172,7 @@ void memoryProcessesWindow(const char *id, ImVec2 size, ImVec2 position)
                 // Get total RAM for memory usage calculation
                 struct sysinfo memInfo;
                 sysinfo(&memInfo);
-                long long totalRam = memInfo.totalram * memInfo.mem_unit;
+                // long long totalRam = memInfo.totalram * memInfo.mem_unit;
 
                 for (const auto &p : processes)
                 {
@@ -227,7 +227,7 @@ void memoryProcessesWindow(const char *id, ImVec2 size, ImVec2 position)
 }
 
 // network, display information network information
-void networkWindow(const char *id, ImVec2 size, ImVec2 position)
+void networkWindow(const char *id, ImVec2 size, ImVec2 position, const NetworkUsage &usage)
 {
     ImGui::Begin(id);
     ImGui::SetWindowSize(id, size);
@@ -259,100 +259,97 @@ void networkWindow(const char *id, ImVec2 size, ImVec2 position)
     ImGui::Separator();
     ImGui::Spacing();
 
-    static float history_scale = 1.0f;
-    ImGui::SliderFloat("Network Scale", &history_scale, 0.1f, 2.0f, "%.1f");
-
-    // Network Statistics Tabs
-    if (ImGui::BeginTabBar("NetworkStatsTabs"))
+    if (ImGui::BeginTabBar("NetworkTabs"))
     {
-        // Network Usage Graphs
-        if (ImGui::BeginTabItem("Network Usage"))
+        if (ImGui::BeginTabItem("Visuals"))
         {
-            NetworkUsage usage = getNetworkUsage();
-
-            // RX Graph
-            ImGui::Text("RX Rate: %.2f MB/s", usage.rxRate);
-            ImGui::PlotLines("##RX", rx_history.values.data(), rx_history.values.size(), 
-                            rx_history.offset, rx_history.overlay_text.c_str(), 
-                            0.0f, 2048.0f * history_scale, ImVec2(0, 80));
-
-            ImGui::Spacing();
-
-            // TX Graph
-            ImGui::Text("TX Rate: %.2f MB/s", usage.txRate);
-            ImGui::PlotLines("##TX", tx_history.values.data(), tx_history.values.size(), 
-                            tx_history.offset, tx_history.overlay_text.c_str(), 
-                            0.0f, 2048.0f * history_scale, ImVec2(0, 80));
-
-            ImGui::EndTabItem();
-        }
-
-        if (ImGui::BeginTabItem("RX Statistics"))
-        {
-            if (ImGui::BeginTable("RXTable", 8, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY))
+            if (ImGui::BeginTabBar("VisualsTabs"))
             {
-                ImGui::TableSetupColumn("Interface");
-                ImGui::TableSetupColumn("Bytes");
-                ImGui::TableSetupColumn("Packets");
-                ImGui::TableSetupColumn("Errors");
-                ImGui::TableSetupColumn("Drop");
-                ImGui::TableSetupColumn("FIFO");
-                ImGui::TableSetupColumn("Collisions");
-                ImGui::TableSetupColumn("Carrier");
-                ImGui::TableHeadersRow();
-
-                map<string, RX> rxStats = getRXStats();
-                for (const auto &[interface, rx] : rxStats)
+                if (ImGui::BeginTabItem("RX"))
                 {
-                    ImGui::TableNextRow();
-                    ImGui::TableNextColumn(); ImGui::Text("%s", interface.c_str());
-                    ImGui::TableNextColumn(); ImGui::Text("%s", formatBytes(rx.bytes).c_str());
-                    ImGui::TableNextColumn(); ImGui::Text("%d", rx.packets);
-                    ImGui::TableNextColumn(); ImGui::Text("%d", rx.errs);
-                    ImGui::TableNextColumn(); ImGui::Text("%d", rx.drop);
-                    ImGui::TableNextColumn(); ImGui::Text("%d", rx.fifo);
-                    ImGui::TableNextColumn(); ImGui::Text("%d", rx.colls);
-                    ImGui::TableNextColumn(); ImGui::Text("%d", rx.carrier);
+                    ImGui::Text("RX Rate: %.2f MB/s", usage.rxRate);
+                    ImGui::ProgressBar(usage.rxRate / 100.0f, ImVec2(0.0f, 0.0f));
+                    ImGui::EndTabItem();
                 }
-                ImGui::EndTable();
+
+                if (ImGui::BeginTabItem("TX"))
+                {
+                    ImGui::Text("TX Rate: %.2f MB/s", usage.txRate);
+                    ImGui::ProgressBar(usage.txRate / 100.0f, ImVec2(0.0f, 0.0f));
+                    ImGui::EndTabItem();
+                }
+                ImGui::EndTabBar();
             }
             ImGui::EndTabItem();
         }
 
-        if (ImGui::BeginTabItem("TX Statistics"))
+        if (ImGui::BeginTabItem("Statistics"))
         {
-            if (ImGui::BeginTable("TXTable", 8, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY))
+            if (ImGui::CollapsingHeader("RX Statistics"))
             {
-                ImGui::TableSetupColumn("Interface");
-                ImGui::TableSetupColumn("Bytes");
-                ImGui::TableSetupColumn("Packets");
-                ImGui::TableSetupColumn("Errors");
-                ImGui::TableSetupColumn("Drop");
-                ImGui::TableSetupColumn("FIFO");
-                ImGui::TableSetupColumn("Frame");
-                ImGui::TableSetupColumn("Compressed");
-                ImGui::TableHeadersRow();
-
-                map<string, TX> txStats = getTXStats();
-                for (const auto &[interface, tx] : txStats)
+                if (ImGui::BeginTable("RXTable", 8, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY))
                 {
-                    ImGui::TableNextRow();
-                    ImGui::TableNextColumn(); ImGui::Text("%s", interface.c_str());
-                    ImGui::TableNextColumn(); ImGui::Text("%s", formatBytes(tx.bytes).c_str());
-                    ImGui::TableNextColumn(); ImGui::Text("%d", tx.packets);
-                    ImGui::TableNextColumn(); ImGui::Text("%d", tx.errs);
-                    ImGui::TableNextColumn(); ImGui::Text("%d", tx.drop);
-                    ImGui::TableNextColumn(); ImGui::Text("%d", tx.fifo);
-                    ImGui::TableNextColumn(); ImGui::Text("%d", tx.frame);
-                    ImGui::TableNextColumn(); ImGui::Text("%d", tx.compressed);
+                    ImGui::TableSetupColumn("Interface");
+                    ImGui::TableSetupColumn("Bytes");
+                    ImGui::TableSetupColumn("Packets");
+                    ImGui::TableSetupColumn("Errors");
+                    ImGui::TableSetupColumn("Drop");
+                    ImGui::TableSetupColumn("FIFO");
+                    ImGui::TableSetupColumn("Collisions");
+                    ImGui::TableSetupColumn("Carrier");
+                    ImGui::TableHeadersRow();
+
+                    map<string, RX> rxStats = getRXStats();
+                    for (const auto &[interface, rx] : rxStats)
+                    {
+                        ImGui::TableNextRow();
+                        ImGui::TableNextColumn(); ImGui::Text("%s", interface.c_str());
+                        ImGui::TableNextColumn(); ImGui::Text("%s", formatBytes(rx.bytes).c_str());
+                        ImGui::TableNextColumn(); ImGui::Text("%d", rx.packets);
+                        ImGui::TableNextColumn(); ImGui::Text("%d", rx.errs);
+                        ImGui::TableNextColumn(); ImGui::Text("%d", rx.drop);
+                        ImGui::TableNextColumn(); ImGui::Text("%d", rx.fifo);
+                        ImGui::TableNextColumn(); ImGui::Text("%d", rx.colls);
+                        ImGui::TableNextColumn(); ImGui::Text("%d", rx.carrier);
+                    }
+                    ImGui::EndTable();
                 }
-                ImGui::EndTable();
+            }
+
+            if (ImGui::CollapsingHeader("TX Statistics"))
+            {
+                if (ImGui::BeginTable("TXTable", 8, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY))
+                {
+                    ImGui::TableSetupColumn("Interface");
+                    ImGui::TableSetupColumn("Bytes");
+                    ImGui::TableSetupColumn("Packets");
+                    ImGui::TableSetupColumn("Errors");
+                    ImGui::TableSetupColumn("Drop");
+                    ImGui::TableSetupColumn("FIFO");
+                    ImGui::TableSetupColumn("Frame");
+                    ImGui::TableSetupColumn("Compressed");
+                    ImGui::TableHeadersRow();
+
+                    map<string, TX> txStats = getTXStats();
+                    for (const auto &[interface, tx] : txStats)
+                    {
+                        ImGui::TableNextRow();
+                        ImGui::TableNextColumn(); ImGui::Text("%s", interface.c_str());
+                        ImGui::TableNextColumn(); ImGui::Text("%s", formatBytes(tx.bytes).c_str());
+                        ImGui::TableNextColumn(); ImGui::Text("%d", tx.packets);
+                        ImGui::TableNextColumn(); ImGui::Text("%d", tx.errs);
+                        ImGui::TableNextColumn(); ImGui::Text("%d", tx.drop);
+                        ImGui::TableNextColumn(); ImGui::Text("%d", tx.fifo);
+                        ImGui::TableNextColumn(); ImGui::Text("%d", tx.frame);
+                        ImGui::TableNextColumn(); ImGui::Text("%d", tx.compressed);
+                    }
+                    ImGui::EndTable();
+                }
             }
             ImGui::EndTabItem();
         }
         ImGui::EndTabBar();
     }
-
     ImGui::End();
 }
 
@@ -468,9 +465,15 @@ int main(int, char **)
                          ImVec2((mainDisplay.x / 2) - 10, (mainDisplay.y / 2) + 30),
                          ImVec2(10, 10));
             // --------------------------------------
+            NetworkUsage usage = getNetworkUsage();
             networkWindow("== Network ==",
                           ImVec2(mainDisplay.x - 20, (mainDisplay.y / 2) - 60),
-                          ImVec2(10, (mainDisplay.y / 2) + 50));
+                          ImVec2(10, (mainDisplay.y / 2) + 50), usage);
+            if (!plot_paused)
+            {
+                rx_history.addValue(usage.rxRate);
+                tx_history.addValue(usage.txRate);
+            }
         }
 
         // Update history data
@@ -479,10 +482,6 @@ int main(int, char **)
             cpu_history.addValue(getCPUUsage());
             fan_history.addValue(getFanSpeed());
             thermal_history.addValue(getCPUTemperature());
-            
-            NetworkUsage usage = getNetworkUsage();
-            rx_history.addValue(usage.rxRate);
-            tx_history.addValue(usage.txRate);
         }
         char buffer[64];
         

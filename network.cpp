@@ -4,8 +4,10 @@
 #include <map>
 
 // Convert bytes to appropriate unit
-string formatBytes(int bytes) {
-    float converted = bytes;
+#include <chrono>
+
+string formatBytes(long long bytes) {
+    double converted = bytes;
     const char* units[] = {"B", "KB", "MB", "GB"};
     int unitIndex = 0;
     
@@ -21,31 +23,39 @@ string formatBytes(int bytes) {
 
 // Get network usage for visual display
 NetworkUsage getNetworkUsage() {
-    static int lastRxBytes = 0;
-    static int lastTxBytes = 0;
-    
+    static unsigned long long lastRxBytes = 0;
+    static unsigned long long lastTxBytes = 0;
+    static auto lastTime = chrono::steady_clock::now();
+
     NetworkUsage usage = {0.0f, 0.0f};
     map<string, RX> rxStats = getRXStats();
     map<string, TX> txStats = getTXStats();
-    
-    // Sum up all interfaces
-    int totalRxBytes = 0;
-    int totalTxBytes = 0;
-    
-    for (const auto& [interface, rx] : rxStats) {
+
+    unsigned long long totalRxBytes = 0;
+    unsigned long long totalTxBytes = 0;
+
+    for (const auto &[interface, rx] : rxStats)
+    {
         totalRxBytes += rx.bytes;
     }
-    
-    for (const auto& [interface, tx] : txStats) {
+
+    for (const auto &[interface, tx] : txStats)
+    {
         totalTxBytes += tx.bytes;
     }
-    
-    // Calculate deltas
-    usage.rxRate = (totalRxBytes - lastRxBytes) / 1024.0f / 1024.0f; // Convert to MB/s
-    usage.txRate = (totalTxBytes - lastTxBytes) / 1024.0f / 1024.0f; // Convert to MB/s
-    
+
+    auto currentTime = chrono::steady_clock::now();
+    double elapsedSeconds = chrono::duration<double>(currentTime - lastTime).count();
+
+    if (elapsedSeconds > 0)
+    {
+        usage.rxRate = (totalRxBytes - lastRxBytes) / elapsedSeconds / (1024.0f * 1024.0f); // MB/s
+        usage.txRate = (totalTxBytes - lastTxBytes) / elapsedSeconds / (1024.0f * 1024.0f); // MB/s
+    }
+
     lastRxBytes = totalRxBytes;
     lastTxBytes = totalTxBytes;
+    lastTime = currentTime;
     
     return usage;
 }

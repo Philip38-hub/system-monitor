@@ -74,7 +74,7 @@ struct Networks
 
 struct TX
 {
-    int bytes;
+    unsigned long long bytes;
     int packets;
     int errs;
     int drop;
@@ -86,7 +86,7 @@ struct TX
 
 struct RX
 {
-    int bytes;
+    unsigned long long bytes;
     int packets;
     int errs;
     int drop;
@@ -150,8 +150,8 @@ vector<IP4> getIPv4Addresses();
 map<string, RX> getRXStats();
 map<string, TX> getTXStats();
 NetworkUsage getNetworkUsage();
-string formatBytes(int bytes);
-void networkWindow(const char *id, ImVec2 size, ImVec2 position);
+string formatBytes(long long bytes);
+void networkWindow(const char *id, ImVec2 size, ImVec2 position, const NetworkUsage &usage);
 void memoryProcessesWindow(const char *id, ImVec2 size, ImVec2 position);
 
 #endif

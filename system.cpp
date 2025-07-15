@@ -126,7 +126,7 @@ float getCPUUsage()
     static long long lastTotalSteal = 0;
     static long long lastTotalGuest = 0;
     static long long lastTotalGuestNice = 0;
-    static long long lastTotalNonIdle = 0; // Corrected: Added this static variable
+    static long long lastTotalNonIdle = 0;
 
     long long user, nice, system, idle, iowait, irq, softirq, steal, guest, guestNice;
     ifstream file("/proc/stat");
@@ -142,7 +142,7 @@ float getCPUUsage()
     long long totalNonIdle = user + nice + system + irq + softirq + steal + guest + guestNice;
     long long total = totalIdle + totalNonIdle;
 
-    long long diffIdle = totalIdle - lastTotalIdle;
+    // long long diffIdle = totalIdle - lastTotalIdle;
     long long diffTotal = total - (lastTotalIdle + lastTotalNonIdle);
 
     float cpu_usage = 0.0f;
