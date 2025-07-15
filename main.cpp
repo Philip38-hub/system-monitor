@@ -1,5 +1,6 @@
 #include "header.h"
 #include <SDL.h>
+#include <set>
 
 /*
 NOTE : You are free to change the code as you wish, the main objective is to make the
@@ -146,7 +147,7 @@ void memoryProcessesWindow(const char *id, ImVec2 size, ImVec2 position)
         if (ImGui::BeginTabItem("Processes"))
         {
             vector<Proc> processes = getAllProcesses();
-            static ImGuiTableFlags flags = ImGuiTableFlags_Resizable | ImGuiTableFlags_Reorderable | ImGuiTableFlags_Hideable | ImGuiTableFlags_BordersOuter | ImGuiTableFlags_BordersV | ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_ScrollY;
+            static ImGuiTableFlags flags = ImGuiTableFlags_Resizable | ImGuiTableFlags_Reorderable | ImGuiTableFlags_Hideable | ImGuiTableFlags_BordersOuter | ImGuiTableFlags_BordersV | ImGuiTableFlags_ScrollY;
             static std::set<int> selected_pids;
 
             // Track previous CPU stats for delta calculation
