@@ -48,6 +48,7 @@ static HistoryData thermal_history;
 static HistoryData rx_history;
 static HistoryData tx_history;
 static bool plot_paused = false;
+static float history_fps = 60.0f;
 
 // systemWindow, display information for the system monitorization
 void systemWindow(const char *id, ImVec2 size, ImVec2 position)
@@ -63,7 +64,6 @@ void systemWindow(const char *id, ImVec2 size, ImVec2 position)
     ImGui::Text("Total Processes: %d", getTotalProcesses());
     ImGui::Text("CPU Type: %s", CPUinfo().c_str());
 
-    static float history_fps = 60.0f;
     static float history_scale = 1.0f;
 
     ImGui::Checkbox("Pause Plot", &plot_paused);
@@ -76,7 +76,7 @@ void systemWindow(const char *id, ImVec2 size, ImVec2 position)
         {
             // student TODO: CPU graph and overlay
             ImGui::PlotLines("##CPU", cpu_history.values.data(), cpu_history.values.size(), cpu_history.offset,
-                             cpu_history.overlay_text.c_str(), 0.0f, 100.0f * history_scale, ImVec2(0, 80));
+                             cpu_history.overlay_text.c_str(), 0.0f, 100.0f * history_scale, ImVec2(0, ImGui::GetContentRegionAvail().y));
             ImGui::EndTabItem();
         }
         if (ImGui::BeginTabItem("Fan"))
@@ -85,7 +85,7 @@ void systemWindow(const char *id, ImVec2 size, ImVec2 position)
             ImGui::Text("Status: %s", getFanStatus().c_str());
             ImGui::Text("Speed: %.0f RPM", getFanSpeed());
             ImGui::PlotLines("##Fan", fan_history.values.data(), fan_history.values.size(), fan_history.offset,
-                             fan_history.overlay_text.c_str(), 0.0f, fan_history.max_value * history_scale, ImVec2(0, 80));
+                             fan_history.overlay_text.c_str(), 0.0f, fan_history.max_value * history_scale, ImVec2(0, ImGui::GetContentRegionAvail().y));
             ImGui::EndTabItem();
         }
         if (ImGui::BeginTabItem("Thermal"))
@@ -93,7 +93,7 @@ void systemWindow(const char *id, ImVec2 size, ImVec2 position)
             // student TODO: Thermal information and graph
             ImGui::Text("Temperature: %.1f C", getCPUTemperature());
             ImGui::PlotLines("##Thermal", thermal_history.values.data(), thermal_history.values.size(), thermal_history.offset,
-                             thermal_history.overlay_text.c_str(), 0.0f, thermal_history.max_value * history_scale, ImVec2(0, 80));
+                             thermal_history.overlay_text.c_str(), 0.0f, thermal_history.max_value * history_scale, ImVec2(0, ImGui::GetContentRegionAvail().y));
             ImGui::EndTabItem();
         }
         ImGui::EndTabBar();
@@ -433,6 +433,7 @@ int main(int, char **)
 
     // Main loop
     bool done = false;
+    NetworkUsage usage = {0.0f, 0.0f};
     while (!done)
     {
         // Poll and handle events (inputs, window resize, etc.)
@@ -465,40 +466,52 @@ int main(int, char **)
                          ImVec2((mainDisplay.x / 2) - 10, (mainDisplay.y / 2) + 30),
                          ImVec2(10, 10));
             // --------------------------------------
-            NetworkUsage usage = getNetworkUsage();
             networkWindow("== Network ==",
                           ImVec2(mainDisplay.x - 20, (mainDisplay.y / 2) - 60),
                           ImVec2(10, (mainDisplay.y / 2) + 50), usage);
-            if (!plot_paused)
-            {
-                rx_history.addValue(usage.rxRate);
-                tx_history.addValue(usage.txRate);
-            }
         }
 
         // Update history data
-        if (!plot_paused)
-        {
+       static float last_update_time = 0.0f;
+       float current_time = ImGui::GetTime();
+       if (!plot_paused && (current_time - last_update_time) > (1.0f/history_fps))
+       {
+            last_update_time = current_time;
+
+            usage = getNetworkUsage();
+            rx_history.addValue(usage.rxRate);
+            tx_history.addValue(usage.txRate);
+
             cpu_history.addValue(getCPUUsage());
             fan_history.addValue(getFanSpeed());
             thermal_history.addValue(getCPUTemperature());
-        }
+       }
         char buffer[64];
         
-        snprintf(buffer, sizeof(buffer), "%.1f %%", cpu_history.values[cpu_history.offset == 0 ? cpu_history.values.size() - 1 : cpu_history.offset - 1]);
-        cpu_history.overlay_text = buffer;
+        if (!cpu_history.values.empty()) {
+            snprintf(buffer, sizeof(buffer), "%.1f %%", cpu_history.values[cpu_history.offset == 0 ? cpu_history.values.size() - 1 : cpu_history.offset - 1]);
+            cpu_history.overlay_text = buffer;
+        }
 
-        snprintf(buffer, sizeof(buffer), "%.0f RPM", fan_history.values[fan_history.offset == 0 ? fan_history.values.size() - 1 : fan_history.offset - 1]);
-        fan_history.overlay_text = buffer;
+        if (!fan_history.values.empty()) {
+            snprintf(buffer, sizeof(buffer), "%.0f RPM", fan_history.values[fan_history.offset == 0 ? fan_history.values.size() - 1 : fan_history.offset - 1]);
+            fan_history.overlay_text = buffer;
+        }
 
-        snprintf(buffer, sizeof(buffer), "%.1f C", thermal_history.values[thermal_history.offset == 0 ? thermal_history.values.size() - 1 : thermal_history.offset - 1]);
-        thermal_history.overlay_text = buffer;
+        if (!thermal_history.values.empty()) {
+            snprintf(buffer, sizeof(buffer), "%.1f C", thermal_history.values[thermal_history.offset == 0 ? thermal_history.values.size() - 1 : thermal_history.offset - 1]);
+            thermal_history.overlay_text = buffer;
+        }
 
-        snprintf(buffer, sizeof(buffer), "%.2f MB/s", rx_history.values[rx_history.offset == 0 ? rx_history.values.size() - 1 : rx_history.offset - 1]);
-        rx_history.overlay_text = buffer;
+        if (!rx_history.values.empty()) {
+            snprintf(buffer, sizeof(buffer), "%.2f MB/s", rx_history.values[rx_history.offset == 0 ? rx_history.values.size() - 1 : rx_history.offset - 1]);
+            rx_history.overlay_text = buffer;
+        }
 
-        snprintf(buffer, sizeof(buffer), "%.2f MB/s", tx_history.values[tx_history.offset == 0 ? tx_history.values.size() - 1 : tx_history.offset - 1]);
-        tx_history.overlay_text = buffer;
+        if (!tx_history.values.empty()) {
+            snprintf(buffer, sizeof(buffer), "%.2f MB/s", tx_history.values[tx_history.offset == 0 ? tx_history.values.size() - 1 : tx_history.offset - 1]);
+            tx_history.overlay_text = buffer;
+        }
 
 
         // Rendering
