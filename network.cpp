@@ -3,6 +3,57 @@
 #include <sstream>
 #include <map>
 
+// Convert bytes to appropriate unit
+string formatBytes(int bytes) {
+    float converted = bytes;
+    const char* units[] = {"B", "KB", "MB", "GB"};
+    int unitIndex = 0;
+    
+    while (converted >= 1024.0f && unitIndex < 3) {
+        converted /= 1024.0f;
+        unitIndex++;
+    }
+    
+    char buffer[32];
+    snprintf(buffer, sizeof(buffer), "%.2f %s", converted, units[unitIndex]);
+    return string(buffer);
+}
+
+// Get network usage for visual display
+NetworkUsage getNetworkUsage() {
+    static int lastRxBytes = 0;
+    static int lastTxBytes = 0;
+    
+    NetworkUsage usage = {0.0f, 0.0f};
+    map<string, RX> rxStats = getRXStats();
+    map<string, TX> txStats = getTXStats();
+    
+    // Sum up all interfaces
+    int totalRxBytes = 0;
+    int totalTxBytes = 0;
+    
+    for (const auto& [interface, rx] : rxStats) {
+        totalRxBytes += rx.bytes;
+    }
+    
+    for (const auto& [interface, tx] : txStats) {
+        totalTxBytes += tx.bytes;
+    }
+    
+    // Calculate deltas
+    if (lastRxBytes > 0) {
+        usage.rxRate = (totalRxBytes - lastRxBytes) / 1024.0f / 1024.0f; // Convert to MB/s
+    }
+    if (lastTxBytes > 0) {
+        usage.txRate = (totalTxBytes - lastTxBytes) / 1024.0f / 1024.0f; // Convert to MB/s
+    }
+    
+    lastRxBytes = totalRxBytes;
+    lastTxBytes = totalTxBytes;
+    
+    return usage;
+}
+
 vector<IP4> getIPv4Addresses() {
     vector<IP4> ip4s;
     struct ifaddrs *ifaddr, *ifa;

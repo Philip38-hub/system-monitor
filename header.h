@@ -96,6 +96,11 @@ struct RX
     int compressed;
 };
 
+struct NetworkUsage {
+    float rxRate;  // MB/s
+    float txRate;  // MB/s
+};
+
 // student TODO : system stats
 string CPUinfo();
 const char *getOsName();
@@ -144,6 +149,8 @@ vector<Proc> getAllProcesses();
 vector<IP4> getIPv4Addresses();
 map<string, RX> getRXStats();
 map<string, TX> getTXStats();
+NetworkUsage getNetworkUsage();
+string formatBytes(int bytes);
 void networkWindow(const char *id, ImVec2 size, ImVec2 position);
 void memoryProcessesWindow(const char *id, ImVec2 size, ImVec2 position);
 

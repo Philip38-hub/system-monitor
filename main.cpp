@@ -44,6 +44,8 @@ using namespace gl;
 static HistoryData cpu_history;
 static HistoryData fan_history;
 static HistoryData thermal_history;
+static HistoryData rx_history;
+static HistoryData tx_history;
 static bool plot_paused = false;
 
 // systemWindow, display information for the system monitorization
@@ -256,9 +258,34 @@ void networkWindow(const char *id, ImVec2 size, ImVec2 position)
     ImGui::Separator();
     ImGui::Spacing();
 
+    static float history_scale = 1.0f;
+    ImGui::SliderFloat("Network Scale", &history_scale, 0.1f, 2.0f, "%.1f");
+
     // Network Statistics Tabs
     if (ImGui::BeginTabBar("NetworkStatsTabs"))
     {
+        // Network Usage Graphs
+        if (ImGui::BeginTabItem("Network Usage"))
+        {
+            NetworkUsage usage = getNetworkUsage();
+
+            // RX Graph
+            ImGui::Text("RX Rate: %.2f MB/s", usage.rxRate);
+            ImGui::PlotLines("##RX", rx_history.values.data(), rx_history.values.size(), 
+                            rx_history.offset, rx_history.overlay_text.c_str(), 
+                            0.0f, 2048.0f * history_scale, ImVec2(0, 80));
+
+            ImGui::Spacing();
+
+            // TX Graph
+            ImGui::Text("TX Rate: %.2f MB/s", usage.txRate);
+            ImGui::PlotLines("##TX", tx_history.values.data(), tx_history.values.size(), 
+                            tx_history.offset, tx_history.overlay_text.c_str(), 
+                            0.0f, 2048.0f * history_scale, ImVec2(0, 80));
+
+            ImGui::EndTabItem();
+        }
+
         if (ImGui::BeginTabItem("RX Statistics"))
         {
             if (ImGui::BeginTable("RXTable", 8, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY))
@@ -278,7 +305,7 @@ void networkWindow(const char *id, ImVec2 size, ImVec2 position)
                 {
                     ImGui::TableNextRow();
                     ImGui::TableNextColumn(); ImGui::Text("%s", interface.c_str());
-                    ImGui::TableNextColumn(); ImGui::Text("%d", rx.bytes);
+                    ImGui::TableNextColumn(); ImGui::Text("%s", formatBytes(rx.bytes).c_str());
                     ImGui::TableNextColumn(); ImGui::Text("%d", rx.packets);
                     ImGui::TableNextColumn(); ImGui::Text("%d", rx.errs);
                     ImGui::TableNextColumn(); ImGui::Text("%d", rx.drop);
@@ -310,7 +337,7 @@ void networkWindow(const char *id, ImVec2 size, ImVec2 position)
                 {
                     ImGui::TableNextRow();
                     ImGui::TableNextColumn(); ImGui::Text("%s", interface.c_str());
-                    ImGui::TableNextColumn(); ImGui::Text("%d", tx.bytes);
+                    ImGui::TableNextColumn(); ImGui::Text("%s", formatBytes(tx.bytes).c_str());
                     ImGui::TableNextColumn(); ImGui::Text("%d", tx.packets);
                     ImGui::TableNextColumn(); ImGui::Text("%d", tx.errs);
                     ImGui::TableNextColumn(); ImGui::Text("%d", tx.drop);
@@ -409,6 +436,9 @@ int main(int, char **)
     HistoryData thermal_history;
     thermal_history.color = ImVec4(1.0f, 0.0f, 0.0f, 1.0f); // Red for Thermal
 
+    rx_history.color = ImVec4(0.0f, 1.0f, 1.0f, 1.0f); // Cyan for RX
+    tx_history.color = ImVec4(1.0f, 0.0f, 1.0f, 1.0f); // Magenta for TX
+
     // Main loop
     bool done = false;
     while (!done)
@@ -454,10 +484,16 @@ int main(int, char **)
             cpu_history.addValue(getCPUUsage());
             fan_history.addValue(getFanSpeed());
             thermal_history.addValue(getCPUTemperature());
+            
+            NetworkUsage usage = getNetworkUsage();
+            rx_history.addValue(usage.rxRate);
+            tx_history.addValue(usage.txRate);
         }
         cpu_history.overlay_text = to_string((int)cpu_history.values[cpu_history.offset == 0 ? cpu_history.values.size() - 1 : cpu_history.offset - 1]) + "%";
         fan_history.overlay_text = to_string((int)fan_history.values[fan_history.offset == 0 ? fan_history.values.size() - 1 : fan_history.offset - 1]) + " RPM";
         thermal_history.overlay_text = to_string((int)thermal_history.values[thermal_history.offset == 0 ? thermal_history.values.size() - 1 : thermal_history.offset - 1]) + " C";
+        rx_history.overlay_text = to_string((int)rx_history.values[rx_history.offset == 0 ? rx_history.values.size() - 1 : rx_history.offset - 1]) + " MB/s";
+        tx_history.overlay_text = to_string((int)tx_history.values[tx_history.offset == 0 ? tx_history.values.size() - 1 : tx_history.offset - 1]) + " MB/s";
 
 
         // Rendering
