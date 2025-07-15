@@ -252,6 +252,79 @@ void networkWindow(const char *id, ImVec2 size, ImVec2 position)
         ImGui::EndTable();
     }
 
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    // Network Statistics Tabs
+    if (ImGui::BeginTabBar("NetworkStatsTabs"))
+    {
+        if (ImGui::BeginTabItem("RX Statistics"))
+        {
+            if (ImGui::BeginTable("RXTable", 8, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY))
+            {
+                ImGui::TableSetupColumn("Interface");
+                ImGui::TableSetupColumn("Bytes");
+                ImGui::TableSetupColumn("Packets");
+                ImGui::TableSetupColumn("Errors");
+                ImGui::TableSetupColumn("Drop");
+                ImGui::TableSetupColumn("FIFO");
+                ImGui::TableSetupColumn("Collisions");
+                ImGui::TableSetupColumn("Carrier");
+                ImGui::TableHeadersRow();
+
+                map<string, RX> rxStats = getRXStats();
+                for (const auto &[interface, rx] : rxStats)
+                {
+                    ImGui::TableNextRow();
+                    ImGui::TableNextColumn(); ImGui::Text("%s", interface.c_str());
+                    ImGui::TableNextColumn(); ImGui::Text("%d", rx.bytes);
+                    ImGui::TableNextColumn(); ImGui::Text("%d", rx.packets);
+                    ImGui::TableNextColumn(); ImGui::Text("%d", rx.errs);
+                    ImGui::TableNextColumn(); ImGui::Text("%d", rx.drop);
+                    ImGui::TableNextColumn(); ImGui::Text("%d", rx.fifo);
+                    ImGui::TableNextColumn(); ImGui::Text("%d", rx.colls);
+                    ImGui::TableNextColumn(); ImGui::Text("%d", rx.carrier);
+                }
+                ImGui::EndTable();
+            }
+            ImGui::EndTabItem();
+        }
+
+        if (ImGui::BeginTabItem("TX Statistics"))
+        {
+            if (ImGui::BeginTable("TXTable", 8, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY))
+            {
+                ImGui::TableSetupColumn("Interface");
+                ImGui::TableSetupColumn("Bytes");
+                ImGui::TableSetupColumn("Packets");
+                ImGui::TableSetupColumn("Errors");
+                ImGui::TableSetupColumn("Drop");
+                ImGui::TableSetupColumn("FIFO");
+                ImGui::TableSetupColumn("Frame");
+                ImGui::TableSetupColumn("Compressed");
+                ImGui::TableHeadersRow();
+
+                map<string, TX> txStats = getTXStats();
+                for (const auto &[interface, tx] : txStats)
+                {
+                    ImGui::TableNextRow();
+                    ImGui::TableNextColumn(); ImGui::Text("%s", interface.c_str());
+                    ImGui::TableNextColumn(); ImGui::Text("%d", tx.bytes);
+                    ImGui::TableNextColumn(); ImGui::Text("%d", tx.packets);
+                    ImGui::TableNextColumn(); ImGui::Text("%d", tx.errs);
+                    ImGui::TableNextColumn(); ImGui::Text("%d", tx.drop);
+                    ImGui::TableNextColumn(); ImGui::Text("%d", tx.fifo);
+                    ImGui::TableNextColumn(); ImGui::Text("%d", tx.frame);
+                    ImGui::TableNextColumn(); ImGui::Text("%d", tx.compressed);
+                }
+                ImGui::EndTable();
+            }
+            ImGui::EndTabItem();
+        }
+        ImGui::EndTabBar();
+    }
+
     ImGui::End();
 }
 

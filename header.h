@@ -142,6 +142,8 @@ vector<Proc> getAllProcesses();
 
 // student TODO : network
 vector<IP4> getIPv4Addresses();
+map<string, RX> getRXStats();
+map<string, TX> getTXStats();
 void networkWindow(const char *id, ImVec2 size, ImVec2 position);
 void memoryProcessesWindow(const char *id, ImVec2 size, ImVec2 position);
 
