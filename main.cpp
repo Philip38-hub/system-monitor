@@ -230,7 +230,27 @@ void networkWindow(const char *id, ImVec2 size, ImVec2 position)
     ImGui::SetWindowSize(id, size);
     ImGui::SetWindowPos(id, position);
 
-    // student TODO : add code here for the network information
+    // Network Interfaces section
+    ImGui::Text("Network Interfaces");
+    ImGui::Separator();
+
+    if (ImGui::BeginTable("NetworkInterfaces", 2, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg))
+    {
+        ImGui::TableSetupColumn("Interface", ImGuiTableColumnFlags_WidthFixed);
+        ImGui::TableSetupColumn("IPv4 Address");
+        ImGui::TableHeadersRow();
+
+        vector<IP4> ip4s = getIPv4Addresses();
+        for (const auto &ip : ip4s)
+        {
+            ImGui::TableNextRow();
+            ImGui::TableNextColumn();
+            ImGui::Text("%s", ip.name);
+            ImGui::TableNextColumn();
+            ImGui::Text("%s", ip.addressBuffer);
+        }
+        ImGui::EndTable();
+    }
 
     ImGui::End();
 }

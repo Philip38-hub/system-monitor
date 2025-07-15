@@ -141,6 +141,7 @@ float getDiskUsage();
 vector<Proc> getAllProcesses();
 
 // student TODO : network
+vector<IP4> getIPv4Addresses();
 void networkWindow(const char *id, ImVec2 size, ImVec2 position);
 void memoryProcessesWindow(const char *id, ImVec2 size, ImVec2 position);
 
