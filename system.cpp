@@ -116,54 +116,54 @@ int getTotalProcesses()
 // Function to get CPU usage percentage
 float getCPUUsage()
 {
-    static long long lastTotalUser = 0;
-    static long long lastTotalUserNice = 0;
-    static long long lastTotalSystem = 0;
-    static long long lastTotalIdle = 0;
-    static long long lastTotalIowait = 0;
-    static long long lastTotalIrq = 0;
-    static long long lastTotalSoftirq = 0;
-    static long long lastTotalSteal = 0;
-    static long long lastTotalGuest = 0;
-    static long long lastTotalGuestNice = 0;
-    static long long lastTotalNonIdle = 0;
+    static unsigned long long lastTotalUser = 0, lastTotalUserNice = 0, lastTotalSystem = 0, lastTotalIdle = 0;
+    unsigned long long totalUser, totalUserNice, totalSystem, totalIdle;
+    float cpu_usage = 0.0;
 
-    long long user, nice, system, idle, iowait, irq, softirq, steal, guest, guestNice;
+    ifstream file("/proc/stat");
+    string line;
+    getline(file, line);
+    file.close();
+
+    sscanf(line.c_str(), "cpu %llu %llu %llu %llu", &totalUser, &totalUserNice, &totalSystem, &totalIdle);
+
+    if (totalUser < lastTotalUser || totalUserNice < lastTotalUserNice || totalSystem < lastTotalSystem || totalIdle < lastTotalIdle)
+    {
+        // Overflow detection. Just skip this value.
+        cpu_usage = 0.0;
+    }
+    else
+    {
+        unsigned long long total = (totalUser - lastTotalUser) + (totalUserNice - lastTotalUserNice) + (totalSystem - lastTotalSystem);
+        cpu_usage = total;
+        total += (totalIdle - lastTotalIdle);
+        if (total != 0)
+            cpu_usage /= total;
+        else
+            cpu_usage = 0;
+        cpu_usage *= 100;
+    }
+
+    lastTotalUser = totalUser;
+    lastTotalUserNice = totalUserNice;
+    lastTotalSystem = totalSystem;
+    lastTotalIdle = totalIdle;
+
+    return cpu_usage;
+}
+
+CPUStats getCPUStats()
+{
+    CPUStats stats = {};
     ifstream file("/proc/stat");
     string line;
     if (getline(file, line))
     {
         sscanf(line.c_str(), "cpu %lld %lld %lld %lld %lld %lld %lld %lld %lld %lld",
-               &user, &nice, &system, &idle, &iowait, &irq, &softirq, &steal, &guest, &guestNice);
+               &stats.user, &stats.nice, &stats.system, &stats.idle, &stats.iowait, &stats.irq, &stats.softirq, &stats.steal, &stats.guest, &stats.guestNice);
     }
     file.close();
-
-    long long totalIdle = idle + iowait;
-    long long totalNonIdle = user + nice + system + irq + softirq + steal + guest + guestNice;
-    long long total = totalIdle + totalNonIdle;
-
-    // long long diffIdle = totalIdle - lastTotalIdle;
-    long long diffTotal = total - (lastTotalIdle + lastTotalNonIdle);
-
-    float cpu_usage = 0.0f;
-    if (diffTotal != 0)
-    {
-        cpu_usage = (float)(totalNonIdle - lastTotalNonIdle) / (float)diffTotal * 100.0f;
-    }
-
-    lastTotalUser = user;
-    lastTotalUserNice = nice;
-    lastTotalSystem = system;
-    lastTotalIdle = totalIdle;
-    lastTotalIowait = iowait;
-    lastTotalIrq = irq;
-    lastTotalSoftirq = softirq;
-    lastTotalSteal = steal;
-    lastTotalGuest = guest;
-    lastTotalGuestNice = guestNice;
-    lastTotalNonIdle = totalNonIdle; // Corrected: Updated lastTotalNonIdle
-
-    return cpu_usage;
+    return stats;
 }
 
 // Function to get fan status (e.g., "active", "inactive")

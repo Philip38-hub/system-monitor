@@ -135,6 +135,7 @@ struct HistoryData
 };
 
 float getCPUUsage();
+CPUStats getCPUStats();
 string getFanStatus();
 float getFanSpeed();
 float getCPUTemperature();

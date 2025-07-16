@@ -103,13 +103,19 @@ void systemWindow(const char *id, ImVec2 size, ImVec2 position)
 }
 
 // Helper to calculate CPU usage for a process
-float calculateProcessCPUUsage(const Proc &p, const CPUStats &prevCPUStats, const CPUStats &currentCPUStats)
+float calculateProcessCPUUsage(const Proc &p, const Proc &prev_p, const CPUStats &prev_cpu, const CPUStats &current_cpu)
 {
-    // This is a simplified calculation. A more accurate one would involve
-    // reading /proc/stat for total CPU time and process-specific CPU times
-    // over a time interval.
-    // For now, we'll just return a dummy value.
-    return (float)(p.utime + p.stime) / (float)(currentCPUStats.user + currentCPUStats.nice + currentCPUStats.system + currentCPUStats.idle) * 100.0f;
+    long long prev_total_cpu = prev_cpu.user + prev_cpu.nice + prev_cpu.system + prev_cpu.idle + prev_cpu.iowait + prev_cpu.irq + prev_cpu.softirq + prev_cpu.steal;
+    long long current_total_cpu = current_cpu.user + current_cpu.nice + current_cpu.system + current_cpu.idle + current_cpu.iowait + current_cpu.irq + current_cpu.softirq + current_cpu.steal;
+
+    long long total_cpu_diff = current_total_cpu - prev_total_cpu;
+    long long total_proc_time_diff = (p.utime + p.stime) - (prev_p.utime + prev_p.stime);
+
+    if (total_cpu_diff > 0)
+    {
+        return 100.0f * (float)total_proc_time_diff / (float)total_cpu_diff * sysconf(_SC_NPROCESSORS_ONLN);
+    }
+    return 0.0f;
 }
 
 // Helper to calculate memory usage for a process
@@ -117,7 +123,7 @@ float calculateProcessMemoryUsage(const Proc &p, long long totalRam)
 {
     if (totalRam == 0)
         return 0.0f;
-    return (float)p.rss / (float)totalRam * 100.0f;
+    return (float)(p.rss * 1024) / (float)totalRam * 100.0f;
 }
 
 // memoryProcessesWindow, display information for the memory and processes information
@@ -138,7 +144,7 @@ void memoryProcessesWindow(const char *id, ImVec2 size, ImVec2 position)
     ImGui::ProgressBar(getDiskUsage() / 100.0f, ImVec2(0.0f, 0.0f));
 
     static ImGuiTextFilter filter;
-    filter.Draw("Filter processes", ImGui::GetContentRegionAvail().x);
+    filter.Draw("Filter processes", 300);
 
     ImGui::Separator();
 
@@ -146,7 +152,7 @@ void memoryProcessesWindow(const char *id, ImVec2 size, ImVec2 position)
     {
         if (ImGui::BeginTabItem("Processes"))
         {
-            vector<Proc> processes = getAllProcesses();
+            static vector<Proc> processes;
             static ImGuiTableFlags flags = ImGuiTableFlags_Resizable | ImGuiTableFlags_Reorderable | ImGuiTableFlags_Hideable | ImGuiTableFlags_BordersOuter | ImGuiTableFlags_BordersV | ImGuiTableFlags_ScrollY;
             static std::set<int> selected_pids;
 
@@ -154,10 +160,29 @@ void memoryProcessesWindow(const char *id, ImVec2 size, ImVec2 position)
             static std::map<int, Proc> prev_proc_stats;
             static CPUStats prev_cpu_stats = {};
             static bool first_frame = true;
+            static float last_update = 0.0f;
 
-            // Get current CPU stats (dummy implementation, should be replaced with real stats)
-            CPUStats current_cpu_stats = {};
-            // TODO: Replace with actual code to read /proc/stat for CPUStats
+            float current_time = ImGui::GetTime();
+            if (current_time - last_update > 1.0f)
+            {
+                last_update = current_time;
+                CPUStats current_cpu_stats = getCPUStats();
+                vector<Proc> current_processes = getAllProcesses();
+
+                // Update prev_proc_stats before clearing
+                if (!first_frame)
+                {
+                    prev_proc_stats.clear();
+                    for (const auto &p : processes)
+                    {
+                        prev_proc_stats[p.pid] = p;
+                    }
+                }
+
+                processes = current_processes;
+                prev_cpu_stats = current_cpu_stats;
+                first_frame = false;
+            }
 
             if (ImGui::BeginTable("ProcessesTable", 6, flags, ImVec2(0, ImGui::GetTextLineHeightWithSpacing() * 15)))
             {
@@ -166,13 +191,13 @@ void memoryProcessesWindow(const char *id, ImVec2 size, ImVec2 position)
                 ImGui::TableSetupColumn("Name");
                 ImGui::TableSetupColumn("State");
                 ImGui::TableSetupColumn("CPU Usage (%)");
-                ImGui::TableSetupColumn("Memory Usage (KB)");
+                ImGui::TableSetupColumn("Memory Usage (%)");
                 ImGui::TableHeadersRow();
 
                 // Get total RAM for memory usage calculation
                 struct sysinfo memInfo;
                 sysinfo(&memInfo);
-                // long long totalRam = memInfo.totalram * memInfo.mem_unit;
+                long long totalRam = memInfo.totalram * memInfo.mem_unit;
 
                 for (const auto &p : processes)
                 {
@@ -204,20 +229,15 @@ void memoryProcessesWindow(const char *id, ImVec2 size, ImVec2 position)
                     float cpu_usage = 0.0f;
                     if (!first_frame && prev_proc_stats.count(p.pid) > 0)
                     {
-                        cpu_usage = calculateProcessCPUUsage(p, prev_cpu_stats, current_cpu_stats);
+                        cpu_usage = calculateProcessCPUUsage(p, prev_proc_stats.at(p.pid), prev_cpu_stats, getCPUStats());
                     }
                     ImGui::Text("%.2f", cpu_usage);
 
                     ImGui::TableNextColumn();
-                    ImGui::Text("%lld", p.rss); // RSS is already in KB from /proc/[pid]/status
-
-                    // Update previous stats for next frame
-                    prev_proc_stats[p.pid] = p;
+                    ImGui::Text("%.2f", calculateProcessMemoryUsage(p, totalRam));
                 }
                 ImGui::EndTable();
             }
-            prev_cpu_stats = current_cpu_stats;
-            first_frame = false;
             ImGui::EndTabItem();
         }
         ImGui::EndTabBar();
