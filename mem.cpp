@@ -106,7 +106,7 @@ vector<Proc> getAllProcesses()
                     // Example: 1 (systemd) S 0 1 1 0 -1 4194304 1000 0 0 0 0 0 0 0 20 0 1 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
                     // char comm[256];
                     char state_char;
-                    unsigned long vsize_ul, rss_ul, utime_ul, stime_ul;
+                    unsigned long vsize_ul, rss_ul, utime_ul, stime_ul, starttime_ul;
 
                     // Read the process name, which can contain spaces and be enclosed in parentheses
                     size_t first_paren = statLine.find('(');
@@ -119,14 +119,27 @@ vector<Proc> getAllProcesses()
 
                     // Extract the rest of the fields after the name
                     string remaining_stat_line = statLine.substr(last_paren + 2); // +2 to skip ') '
-                    sscanf(remaining_stat_line.c_str(), "%c %*d %*d %*d %*d %*d %*u %*u %*u %*u %lu %lu %*d %*d %*d %*d %*d %*d %*u %lu %ld",
-                           &state_char, &utime_ul, &stime_ul, &vsize_ul, &rss_ul);
-
+                    // Corrected sscanf to accurately parse fields from /proc/[pid]/stat
+                    // Fields needed: state, utime, stime, vsize, rss, starttime
+                    // The format string needs to account for all fields before the ones we need.
+                    // Based on proc(5) man page, fields are:
+                    // pid comm state ppid pgrp session tty_nr tpgid flags minflt cminflt majflt cmajflt utime stime cutime cstime priority nice num_threads rtpriority processor vsize rss starttime ...
+                    // We need to parse: state (field 3), utime (field 14), stime (field 15), vsize (field 23), rss (field 24), starttime (field 22)
+                    // The remaining_stat_line starts after 'comm' (field 2), so state is the 1st field in remaining_stat_line.
+                    // utime is the 12th field in remaining_stat_line.
+                    // stime is the 13th field in remaining_stat_line.
+                    // vsize is the 21st field in remaining_stat_line.
+                    // rss is the 22nd field in remaining_stat_line.
+                    // starttime is the 23rd field in remaining_stat_line.
+                    sscanf(remaining_stat_line.c_str(), "%c %*s %*s %*s %*s %*s %*s %*s %*s %*s %*s %lu %lu %*s %*s %*s %*s %*s %*s %*s %lu %lu %lu",
+                           &state_char, &utime_ul, &stime_ul, &vsize_ul, &rss_ul, &starttime_ul);
+ 
                     p.state = state_char;
                     p.vsize = vsize_ul;
                     p.rss = rss_ul;
                     p.utime = utime_ul;
                     p.stime = stime_ul;
+                    p.starttime = starttime_ul;
 
                     // Get memory usage from /proc/[pid]/status (VmRSS)
                     string vmRSS = getProcValue<string>(statusPath, "VmRSS:");

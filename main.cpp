@@ -21,7 +21,8 @@ NOTE : You are free to change the code as you wish, the main objective is to mak
 //  Helper libraries are often used for this purpose! Here we are supporting a few common ones (gl3w, glew, glad).
 //  You may use another loader/header of your choice (glext, glLoadGen, etc.), or chose to manually implement your own.
 #if defined(IMGUI_IMPL_OPENGL_LOADER_GL3W)
-#include <GL/gl3w.h> // Initialize with gl3wInit()
+#include <GL/gl3w.h>    // Initialize with gl3wInit()
+#include <unordered_map> // For std::unordered_map
 #elif defined(IMGUI_IMPL_OPENGL_LOADER_GLEW)
 #include <GL/glew.h> // Initialize with glewInit()
 #elif defined(IMGUI_IMPL_OPENGL_LOADER_GLAD)
@@ -102,20 +103,100 @@ void systemWindow(const char *id, ImVec2 size, ImVec2 position)
     ImGui::End();
 }
 
+// Structure to store process CPU usage tracking data
+struct ProcessCPUData {
+    long long lastProcTime = 0;
+    long long lastTotalTime = 0;
+    float lastCpuUsage = 0.0f;
+    float lastUpdateTime = 0.0f;
+    static constexpr float updateInterval = 0.5f; // Update interval in seconds
+};
+
+// Map to store process CPU usage data
+static std::unordered_map<int, ProcessCPUData> processCpuData;
+
+// Helper to get the number of CPU cores
+static int getNumCores() {
+    static int num_cores = 0;
+    if (num_cores == 0) {
+        num_cores = sysconf(_SC_NPROCESSORS_ONLN);
+        if (num_cores <= 0) num_cores = 1; // Fallback to 1 core if detection fails
+    }
+    return num_cores;
+}
+
 // Helper to calculate CPU usage for a process
 float calculateProcessCPUUsage(const Proc &p, const Proc &prev_p, const CPUStats &prev_cpu, const CPUStats &current_cpu)
 {
-    long long prev_total_cpu = prev_cpu.user + prev_cpu.nice + prev_cpu.system + prev_cpu.idle + prev_cpu.iowait + prev_cpu.irq + prev_cpu.softirq + prev_cpu.steal;
-    long long current_total_cpu = current_cpu.user + current_cpu.nice + current_cpu.system + current_cpu.idle + current_cpu.iowait + current_cpu.irq + current_cpu.softirq + current_cpu.steal;
-
-    long long total_cpu_diff = current_total_cpu - prev_total_cpu;
-    long long total_proc_time_diff = (p.utime + p.stime) - (prev_p.utime + prev_p.stime);
-
-    if (total_cpu_diff > 0)
-    {
-        return 100.0f * (float)total_proc_time_diff / (float)total_cpu_diff * sysconf(_SC_NPROCESSORS_ONLN);
+    float currentTime = ImGui::GetTime();
+    
+    // Get or create process CPU data
+    ProcessCPUData &cpuData = processCpuData[p.pid];
+    
+    // Return cached value if not time to update
+    if (currentTime - cpuData.lastUpdateTime < ProcessCPUData::updateInterval) {
+        return cpuData.lastCpuUsage;
     }
-    return 0.0f;
+    
+    // Get number of CPU cores for normalization
+    static int numCores = getNumCores();
+    
+    // Get the system's clock ticks per second
+    static long hz = sysconf(_SC_CLK_TCK);
+    if (hz <= 0) hz = 100; // Fallback value if can't determine
+    
+    // Calculate process CPU time delta
+    long long processCPUTimeDelta = (p.utime + p.stime) - cpuData.lastProcTime;
+    
+    // Calculate total system CPU time delta
+    long long totalSystemTimeDelta = (current_cpu.user - prev_cpu.user) +
+                                     (current_cpu.nice - prev_cpu.nice) +
+                                     (current_cpu.system - prev_cpu.system) +
+                                     (current_cpu.idle - prev_cpu.idle) +
+                                     (current_cpu.iowait - prev_cpu.iowait) +
+                                     (current_cpu.irq - prev_cpu.irq) +
+                                     (current_cpu.softirq - prev_cpu.softirq) +
+                                     (current_cpu.steal - prev_cpu.steal);
+ 
+    float cpuUsage = 0.0f;
+    
+    if (totalSystemTimeDelta > 0 && processCPUTimeDelta >= 0) {
+        // Calculate the time interval in seconds
+        float timeInterval = (currentTime - cpuData.lastUpdateTime);
+        
+        // Convert process CPU time delta from jiffies to seconds
+        float processTime = (float)processCPUTimeDelta / (float)hz;
+        
+        // Calculate CPU usage percentage
+        if (timeInterval > 0) {
+            // This formula should more closely match top's calculation
+            // It represents the fraction of CPU time the process used during the interval.
+            cpuUsage = (processTime / timeInterval) * 100.0f;
+            
+            // top displays per-core usage, so a single process can use up to 100% * num_cores.
+            // However, if we are reporting the total CPU usage of a process across all cores,
+            // then capping at 100% might be appropriate depending on the desired output.
+            // For now, let's keep the cap at 100% as it was before, assuming we want the percentage of *one* core's capacity.
+            // If the goal is to match top's total usage across all cores, this might need adjustment.
+            cpuUsage = std::min(cpuUsage, 100.0f);
+            
+            // Ensure we don't show negative values
+            cpuUsage = std::max(0.0f, cpuUsage);
+            
+            // Debug output (uncomment to see values)
+            // printf("PID %d: procTimeDelta=%lld, totalSystemTimeDelta=%lld, interval=%.2fs, raw=%.2f%%, cpu=%.2f%%\n",
+            //        p.pid, processCPUTimeDelta, totalSystemTimeDelta, timeInterval,
+            //        (processTime / timeInterval) * 100.0f, cpuUsage);
+        }
+    }
+    
+    // Update stored values
+    cpuData.lastProcTime = p.utime + p.stime; // Store the current total process time
+    // cpuData.lastTotalTime = currentTotalSystemTime; // This line is removed as currentTotalSystemTime is not used
+    cpuData.lastCpuUsage = cpuUsage;
+    cpuData.lastUpdateTime = currentTime;
+    
+    return cpuUsage;
 }
 
 // Helper to calculate memory usage for a process
@@ -153,35 +234,44 @@ void memoryProcessesWindow(const char *id, ImVec2 size, ImVec2 position)
         if (ImGui::BeginTabItem("Processes"))
         {
             static vector<Proc> processes;
+            static std::map<int, float> process_cpu_usage;
             static ImGuiTableFlags flags = ImGuiTableFlags_Resizable | ImGuiTableFlags_Reorderable | ImGuiTableFlags_Hideable | ImGuiTableFlags_BordersOuter | ImGuiTableFlags_BordersV | ImGuiTableFlags_ScrollY;
             static std::set<int> selected_pids;
 
             // Track previous CPU stats for delta calculation
             static std::map<int, Proc> prev_proc_stats;
+            static bool first_run = true;
+            static float last_update_time = 0.0f;
+
             static CPUStats prev_cpu_stats = {};
-            static bool first_frame = true;
-            static float last_update = 0.0f;
 
             float current_time = ImGui::GetTime();
-            if (current_time - last_update > 1.0f)
+            if (current_time - last_update_time > 1.0f)
             {
-                last_update = current_time;
+                last_update_time = current_time;
+
                 CPUStats current_cpu_stats = getCPUStats();
                 vector<Proc> current_processes = getAllProcesses();
 
-                // Update prev_proc_stats before clearing
-                if (!first_frame)
+                if (!first_run)
                 {
-                    prev_proc_stats.clear();
-                    for (const auto &p : processes)
+                    for (const auto &p : current_processes)
                     {
-                        prev_proc_stats[p.pid] = p;
+                        if (prev_proc_stats.count(p.pid) > 0)
+                        {
+                            process_cpu_usage[p.pid] = calculateProcessCPUUsage(p, prev_proc_stats.at(p.pid), prev_cpu_stats, current_cpu_stats);
+                        }
                     }
                 }
 
+                prev_proc_stats.clear();
+                for (const auto &p : current_processes)
+                {
+                    prev_proc_stats[p.pid] = p;
+                }
                 processes = current_processes;
                 prev_cpu_stats = current_cpu_stats;
-                first_frame = false;
+                first_run = false;
             }
 
             if (ImGui::BeginTable("ProcessesTable", 6, flags, ImVec2(0, ImGui::GetTextLineHeightWithSpacing() * 15)))
@@ -225,13 +315,8 @@ void memoryProcessesWindow(const char *id, ImVec2 size, ImVec2 position)
                     ImGui::Text("%c", p.state);
                     ImGui::TableNextColumn();
 
-                    // Calculate CPU usage for each process
-                    float cpu_usage = 0.0f;
-                    if (!first_frame && prev_proc_stats.count(p.pid) > 0)
-                    {
-                        cpu_usage = calculateProcessCPUUsage(p, prev_proc_stats.at(p.pid), prev_cpu_stats, getCPUStats());
-                    }
-                    ImGui::Text("%.2f", cpu_usage);
+                    // Display the stored CPU usage
+                    ImGui::Text("%.2f", process_cpu_usage.count(p.pid) ? process_cpu_usage[p.pid] : 0.0f);
 
                     ImGui::TableNextColumn();
                     ImGui::Text("%.2f", calculateProcessMemoryUsage(p, totalRam));

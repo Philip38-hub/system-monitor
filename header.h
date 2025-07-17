@@ -59,6 +59,7 @@ struct Proc
     long long int rss;
     long long int utime;
     long long int stime;
+    long long int starttime;
 };
 
 struct IP4
@@ -107,6 +108,7 @@ const char *getOsName();
 string getLoggedInUser();
 string getHostname();
 int getTotalProcesses();
+float getSystemUptime();
 
 struct HistoryData
 {

@@ -134,14 +134,20 @@ float getCPUUsage()
     }
     else
     {
-        unsigned long long total = (totalUser - lastTotalUser) + (totalUserNice - lastTotalUserNice) + (totalSystem - lastTotalSystem);
-        cpu_usage = total;
-        total += (totalIdle - lastTotalIdle);
-        if (total != 0)
-            cpu_usage /= total;
+        unsigned long long totalUserDiff = totalUser - lastTotalUser;
+        unsigned long long totalUserNiceDiff = totalUserNice - lastTotalUserNice;
+        unsigned long long totalSystemDiff = totalSystem - lastTotalSystem;
+        unsigned long long totalIdleDiff = totalIdle - lastTotalIdle;
+        unsigned long long totalDiff = totalUserDiff + totalUserNiceDiff + totalSystemDiff + totalIdleDiff;
+
+        if (totalDiff > 0)
+        {
+            cpu_usage = (float)(totalUserDiff + totalUserNiceDiff + totalSystemDiff) / (float)totalDiff * 100.0f;
+        }
         else
-            cpu_usage = 0;
-        cpu_usage *= 100;
+        {
+            cpu_usage = 0.0f;
+        }
     }
 
     lastTotalUser = totalUser;
@@ -226,4 +232,13 @@ float getCPUTemperature()
         }
     }
     return 0.0f; // Default if no temperature is found
+}
+// Function to get system uptime in seconds
+float getSystemUptime()
+{
+    ifstream file("/proc/uptime");
+    string line;
+    getline(file, line);
+    file.close();
+    return stof(line.substr(0, line.find(" ")));
 }
