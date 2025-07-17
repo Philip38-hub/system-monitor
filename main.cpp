@@ -1,6 +1,8 @@
 #include "header.h"
 #include <SDL.h>
 #include <set>
+#include <unordered_map> // For std::unordered_map
+#include <map> // For std::map
 
 /*
 NOTE : You are free to change the code as you wish, the main objective is to make the
@@ -22,7 +24,6 @@ NOTE : You are free to change the code as you wish, the main objective is to mak
 //  You may use another loader/header of your choice (glext, glLoadGen, etc.), or chose to manually implement your own.
 #if defined(IMGUI_IMPL_OPENGL_LOADER_GL3W)
 #include <GL/gl3w.h>    // Initialize with gl3wInit()
-#include <unordered_map> // For std::unordered_map
 #elif defined(IMGUI_IMPL_OPENGL_LOADER_GLEW)
 #include <GL/glew.h> // Initialize with glewInit()
 #elif defined(IMGUI_IMPL_OPENGL_LOADER_GLAD)
@@ -46,10 +47,9 @@ using namespace gl;
 static HistoryData cpu_history;
 static HistoryData fan_history;
 static HistoryData thermal_history;
-static HistoryData rx_history;
-static HistoryData tx_history;
 static bool plot_paused = false;
 static float history_fps = 60.0f;
+static float network_max_usage_gb = 2.0f; // Default max usage for network visualization in GB
 
 // systemWindow, display information for the system monitorization
 void systemWindow(const char *id, ImVec2 size, ImVec2 position)
@@ -332,7 +332,7 @@ void memoryProcessesWindow(const char *id, ImVec2 size, ImVec2 position)
 }
 
 // network, display information network information
-void networkWindow(const char *id, ImVec2 size, ImVec2 position, const NetworkUsage &usage)
+void networkWindow(const char *id, ImVec2 size, ImVec2 position)
 {
     ImGui::Begin(id);
     ImGui::SetWindowSize(id, size);
@@ -364,26 +364,30 @@ void networkWindow(const char *id, ImVec2 size, ImVec2 position, const NetworkUs
     ImGui::Separator();
     ImGui::Spacing();
 
+    ImGui::SliderFloat("Max Usage (GB)", &network_max_usage_gb, 0.1f, 10.0f, "%.1f GB"); // Slider for max usage in GB
+
     if (ImGui::BeginTabBar("NetworkTabs"))
     {
         if (ImGui::BeginTabItem("Visuals"))
         {
-            if (ImGui::BeginTabBar("VisualsTabs"))
-            {
-                if (ImGui::BeginTabItem("RX"))
-                {
-                    ImGui::Text("RX Rate: %.2f MB/s", usage.rxRate);
-                    ImGui::ProgressBar(usage.rxRate / 100.0f, ImVec2(0.0f, 0.0f));
-                    ImGui::EndTabItem();
-                }
+            map<string, RX> rxStats = getRXStats();
+            map<string, TX> txStats = getTXStats();
 
-                if (ImGui::BeginTabItem("TX"))
-                {
-                    ImGui::Text("TX Rate: %.2f MB/s", usage.txRate);
-                    ImGui::ProgressBar(usage.txRate / 100.0f, ImVec2(0.0f, 0.0f));
-                    ImGui::EndTabItem();
-                }
-                ImGui::EndTabBar();
+            ImGui::Text("RX Usage:");
+            ImGui::Separator();
+            for (const auto &[interface, rx] : rxStats)
+            {
+                ImGui::Text("%s RX: %s", interface.c_str(), formatBytes(rx.bytes).c_str());
+                ImGui::ProgressBar((float)rx.bytes / (network_max_usage_gb * 1024.0f * 1024.0f * 1024.0f), ImVec2(0.0f, 0.0f));
+            }
+
+            ImGui::Spacing();
+            ImGui::Text("TX Usage:");
+            ImGui::Separator();
+            for (const auto &[interface, tx] : txStats)
+            {
+                ImGui::Text("%s TX: %s", interface.c_str(), formatBytes(tx.bytes).c_str());
+                ImGui::ProgressBar((float)tx.bytes / (network_max_usage_gb * 1024.0f * 1024.0f * 1024.0f), ImVec2(0.0f, 0.0f));
             }
             ImGui::EndTabItem();
         }
@@ -533,12 +537,9 @@ int main(int, char **)
     cpu_history.color = ImVec4(0.0f, 1.0f, 0.0f, 1.0f); // Green for CPU
     fan_history.color = ImVec4(0.0f, 0.5f, 1.0f, 1.0f); // Blue for Fan
     thermal_history.color = ImVec4(1.0f, 0.0f, 0.0f, 1.0f); // Red for Thermal
-    rx_history.color = ImVec4(0.0f, 1.0f, 1.0f, 1.0f); // Cyan for RX
-    tx_history.color = ImVec4(1.0f, 0.0f, 1.0f, 1.0f); // Magenta for TX
 
     // Main loop
     bool done = false;
-    NetworkUsage usage = {0.0f, 0.0f};
     while (!done)
     {
         // Poll and handle events (inputs, window resize, etc.)
@@ -573,7 +574,7 @@ int main(int, char **)
             // --------------------------------------
             networkWindow("== Network ==",
                           ImVec2(mainDisplay.x - 20, (mainDisplay.y / 2) - 60),
-                          ImVec2(10, (mainDisplay.y / 2) + 50), usage);
+                          ImVec2(10, (mainDisplay.y / 2) + 50));
         }
 
         // Update history data
@@ -582,10 +583,6 @@ int main(int, char **)
        if (!plot_paused && (current_time - last_update_time) > (1.0f/history_fps))
        {
             last_update_time = current_time;
-
-            usage = getNetworkUsage();
-            rx_history.addValue(usage.rxRate);
-            tx_history.addValue(usage.txRate);
 
             cpu_history.addValue(getCPUUsage());
             fan_history.addValue(getFanSpeed());
@@ -608,15 +605,6 @@ int main(int, char **)
             thermal_history.overlay_text = buffer;
         }
 
-        if (!rx_history.values.empty()) {
-            snprintf(buffer, sizeof(buffer), "%.2f MB/s", rx_history.values[rx_history.offset == 0 ? rx_history.values.size() - 1 : rx_history.offset - 1]);
-            rx_history.overlay_text = buffer;
-        }
-
-        if (!tx_history.values.empty()) {
-            snprintf(buffer, sizeof(buffer), "%.2f MB/s", tx_history.values[tx_history.offset == 0 ? tx_history.values.size() - 1 : tx_history.offset - 1]);
-            tx_history.overlay_text = buffer;
-        }
 
 
         // Rendering
