@@ -370,24 +370,34 @@ void networkWindow(const char *id, ImVec2 size, ImVec2 position)
     {
         if (ImGui::BeginTabItem("Visuals"))
         {
-            map<string, RX> rxStats = getRXStats();
-            map<string, TX> txStats = getTXStats();
-
-            ImGui::Text("RX Usage:");
-            ImGui::Separator();
-            for (const auto &[interface, rx] : rxStats)
+            if (ImGui::BeginTabBar("VisualsTabs"))
             {
-                ImGui::Text("%s RX: %s", interface.c_str(), formatBytes(rx.bytes).c_str());
-                ImGui::ProgressBar((float)rx.bytes / (network_max_usage_gb * 1024.0f * 1024.0f * 1024.0f), ImVec2(0.0f, 0.0f));
-            }
+                if (ImGui::BeginTabItem("RX"))
+                {
+                    map<string, RX> rxStats = getRXStats();
+                    ImGui::Text("RX Usage:");
+                    ImGui::Separator();
+                    for (const auto &[interface, rx] : rxStats)
+                    {
+                        ImGui::Text("%s RX: %s", interface.c_str(), formatBytes(rx.bytes).c_str());
+                        ImGui::ProgressBar((float)rx.bytes / (network_max_usage_gb * 1024.0f * 1024.0f * 1024.0f), ImVec2(0.0f, 0.0f));
+                    }
+                    ImGui::EndTabItem();
+                }
 
-            ImGui::Spacing();
-            ImGui::Text("TX Usage:");
-            ImGui::Separator();
-            for (const auto &[interface, tx] : txStats)
-            {
-                ImGui::Text("%s TX: %s", interface.c_str(), formatBytes(tx.bytes).c_str());
-                ImGui::ProgressBar((float)tx.bytes / (network_max_usage_gb * 1024.0f * 1024.0f * 1024.0f), ImVec2(0.0f, 0.0f));
+                if (ImGui::BeginTabItem("TX"))
+                {
+                    map<string, TX> txStats = getTXStats();
+                    ImGui::Text("TX Usage:");
+                    ImGui::Separator();
+                    for (const auto &[interface, tx] : txStats)
+                    {
+                        ImGui::Text("%s TX: %s", interface.c_str(), formatBytes(tx.bytes).c_str());
+                        ImGui::ProgressBar((float)tx.bytes / (network_max_usage_gb * 1024.0f * 1024.0f * 1024.0f), ImVec2(0.0f, 0.0f));
+                    }
+                    ImGui::EndTabItem();
+                }
+                ImGui::EndTabBar();
             }
             ImGui::EndTabItem();
         }
