@@ -138,10 +138,37 @@ string getFanStatus();
 float getFanSpeed();
 float getCPUTemperature();
 
+// Memory information structures
+struct MemoryInfo {
+    double totalGB;
+    double usedGB;
+    double freeGB;
+    double availableGB;
+    double buffCacheGB;
+    float usagePercent;
+};
+
+struct SwapInfo {
+    double totalGB;
+    double usedGB;
+    double freeGB;
+    float usagePercent;
+};
+
+struct DiskInfo {
+    double totalGB;
+    double usedGB;
+    double availableGB;
+    float usagePercent;
+};
+
 // student TODO : memory and processes
 float getMemoryUsage();
+MemoryInfo getDetailedMemoryInfo();
 float getSwapUsage();
+SwapInfo getDetailedSwapInfo();
 float getDiskUsage();
+DiskInfo getDetailedDiskInfo();
 vector<Proc> getAllProcesses();
 
 // student TODO : network

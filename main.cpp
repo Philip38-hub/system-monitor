@@ -3,6 +3,7 @@
 #include <set>
 #include <unordered_map> // For std::unordered_map
 #include <map> // For std::map
+#include <cmath> // For round function
 
 /*
 NOTE : You are free to change the code as you wish, the main objective is to make the
@@ -103,18 +104,6 @@ void systemWindow(const char *id, ImVec2 size, ImVec2 position)
     ImGui::End();
 }
 
-// Structure to store process CPU usage tracking data
-struct ProcessCPUData {
-    long long lastProcTime = 0;
-    long long lastTotalTime = 0;
-    float lastCpuUsage = 0.0f;
-    float lastUpdateTime = 0.0f;
-    static constexpr float updateInterval = 0.5f; // Update interval in seconds
-};
-
-// Map to store process CPU usage data
-static std::unordered_map<int, ProcessCPUData> processCpuData;
-
 // Helper to get the number of CPU cores
 static int getNumCores() {
     static int num_cores = 0;
@@ -125,30 +114,13 @@ static int getNumCores() {
     return num_cores;
 }
 
-// Helper to calculate CPU usage for a process
+// Helper to calculate CPU usage for a process (matching 'top' algorithm)
 float calculateProcessCPUUsage(const Proc &p, const Proc &prev_p, const CPUStats &prev_cpu, const CPUStats &current_cpu)
 {
-    float currentTime = ImGui::GetTime();
-    
-    // Get or create process CPU data
-    ProcessCPUData &cpuData = processCpuData[p.pid];
-    
-    // Return cached value if not time to update
-    if (currentTime - cpuData.lastUpdateTime < ProcessCPUData::updateInterval) {
-        return cpuData.lastCpuUsage;
-    }
-    
-    // Get number of CPU cores for normalization
-    static int numCores = getNumCores();
-    
-    // Get the system's clock ticks per second
-    static long hz = sysconf(_SC_CLK_TCK);
-    if (hz <= 0) hz = 100; // Fallback value if can't determine
-    
-    // Calculate process CPU time delta
-    long long processCPUTimeDelta = (p.utime + p.stime) - cpuData.lastProcTime;
-    
-    // Calculate total system CPU time delta
+    // Calculate process CPU time delta (in jiffies)
+    long long processCPUTimeDelta = (p.utime + p.stime) - (prev_p.utime + prev_p.stime);
+
+    // Calculate total system CPU time delta (in jiffies)
     long long totalSystemTimeDelta = (current_cpu.user - prev_cpu.user) +
                                      (current_cpu.nice - prev_cpu.nice) +
                                      (current_cpu.system - prev_cpu.system) +
@@ -157,54 +129,47 @@ float calculateProcessCPUUsage(const Proc &p, const Proc &prev_p, const CPUStats
                                      (current_cpu.irq - prev_cpu.irq) +
                                      (current_cpu.softirq - prev_cpu.softirq) +
                                      (current_cpu.steal - prev_cpu.steal);
- 
+
     float cpuUsage = 0.0f;
-    
+
+    // Calculate CPU usage percentage like 'top' does
     if (totalSystemTimeDelta > 0 && processCPUTimeDelta >= 0) {
-        // Calculate the time interval in seconds
-        float timeInterval = (currentTime - cpuData.lastUpdateTime);
-        
-        // Convert process CPU time delta from jiffies to seconds
-        float processTime = (float)processCPUTimeDelta / (float)hz;
-        
-        // Calculate CPU usage percentage
-        if (timeInterval > 0) {
-            // This formula should more closely match top's calculation
-            // It represents the fraction of CPU time the process used during the interval.
-            cpuUsage = (processTime / timeInterval) * 100.0f;
-            
-            // top displays per-core usage, so a single process can use up to 100% * num_cores.
-            // However, if we are reporting the total CPU usage of a process across all cores,
-            // then capping at 100% might be appropriate depending on the desired output.
-            // For now, let's keep the cap at 100% as it was before, assuming we want the percentage of *one* core's capacity.
-            // If the goal is to match top's total usage across all cores, this might need adjustment.
-            cpuUsage = std::min(cpuUsage, 100.0f);
-            
-            // Ensure we don't show negative values
-            cpuUsage = std::max(0.0f, cpuUsage);
-            
-            // Debug output (uncomment to see values)
-            // printf("PID %d: procTimeDelta=%lld, totalSystemTimeDelta=%lld, interval=%.2fs, raw=%.2f%%, cpu=%.2f%%\n",
-            //        p.pid, processCPUTimeDelta, totalSystemTimeDelta, timeInterval,
-            //        (processTime / timeInterval) * 100.0f, cpuUsage);
+        // Get number of CPU cores
+        static int numCores = 0;
+        if (numCores == 0) {
+            numCores = sysconf(_SC_NPROCESSORS_ONLN);
+            if (numCores <= 0) numCores = 1;
         }
+
+        // CPU usage = (process_cpu_time_delta / total_cpu_time_delta) * 100 * num_cores
+        // This matches the algorithm used by 'top' command more closely
+        cpuUsage = ((float)processCPUTimeDelta / (float)totalSystemTimeDelta) * 100.0f * numCores;
+
+        // Ensure we don't show negative values
+        cpuUsage = std::max(0.0f, cpuUsage);
     }
-    
-    // Update stored values
-    cpuData.lastProcTime = p.utime + p.stime; // Store the current total process time
-    // cpuData.lastTotalTime = currentTotalSystemTime; // This line is removed as currentTotalSystemTime is not used
-    cpuData.lastCpuUsage = cpuUsage;
-    cpuData.lastUpdateTime = currentTime;
-    
+
     return cpuUsage;
 }
 
-// Helper to calculate memory usage for a process
+// Helper to calculate memory usage percentage for a process
 float calculateProcessMemoryUsage(const Proc &p, long long totalRam)
 {
     if (totalRam == 0)
         return 0.0f;
     return (float)(p.rss * 1024) / (float)totalRam * 100.0f;
+}
+
+// Helper to format memory size like 'top' command (in KB/MB)
+string formatProcessMemory(long long rssKB)
+{
+    if (rssKB < 1024) {
+        return to_string(rssKB) + "k";
+    } else if (rssKB < 1024 * 1024) {
+        return to_string(rssKB / 1024) + "m";
+    } else {
+        return to_string(rssKB / (1024 * 1024)) + "g";
+    }
 }
 
 // memoryProcessesWindow, display information for the memory and processes information
@@ -215,14 +180,43 @@ void memoryProcessesWindow(const char *id, ImVec2 size, ImVec2 position)
     ImGui::SetWindowPos(id, position);
 
     // student TODO : add code here for the memory and process information
-    ImGui::Text("Physical Memory (RAM) Usage: %.1f%%", getMemoryUsage());
-    ImGui::ProgressBar(getMemoryUsage() / 100.0f, ImVec2(0.0f, 0.0f));
 
-    ImGui::Text("Virtual Memory (SWAP) Usage: %.1f%%", getSwapUsage());
-    ImGui::ProgressBar(getSwapUsage() / 100.0f, ImVec2(0.0f, 0.0f));
+    // Get detailed memory information
+    MemoryInfo memInfo = getDetailedMemoryInfo();
+    SwapInfo swapInfo = getDetailedSwapInfo();
 
-    ImGui::Text("Disk Usage: %.1f%%", getDiskUsage());
-    ImGui::ProgressBar(getDiskUsage() / 100.0f, ImVec2(0.0f, 0.0f));
+    // Display memory information like 'free -h'
+    ImGui::Text("Memory (RAM):");
+    ImGui::Text("  Total: %.1f Gi, Used: %.1f Gi, Free: %.1f Gi, Available: %.1f Gi",
+                memInfo.totalGB, memInfo.usedGB, memInfo.freeGB, memInfo.availableGB);
+    ImGui::Text("  Usage: %.1f%%", memInfo.usagePercent);
+    ImGui::ProgressBar(memInfo.usagePercent / 100.0f, ImVec2(0.0f, 0.0f));
+
+    ImGui::Spacing();
+
+    // Display swap information like 'free -h'
+    ImGui::Text("Swap:");
+    ImGui::Text("  Total: %.1f Gi, Used: %.1f Gi, Free: %.1f Gi",
+                swapInfo.totalGB, swapInfo.usedGB, swapInfo.freeGB);
+    ImGui::Text("  Usage: %.1f%%", swapInfo.usagePercent);
+    ImGui::ProgressBar(swapInfo.usagePercent / 100.0f, ImVec2(0.0f, 0.0f));
+
+    ImGui::Spacing();
+
+    // Display disk information like 'df -h /'
+    DiskInfo diskInfo = getDetailedDiskInfo();
+
+    // Round values like 'df -h' does
+    // df tends to round up used space and available space (conservative estimates)
+    int totalG = (int)round(diskInfo.totalGB);
+    int usedG = (int)ceil(diskInfo.usedGB);      // Round up for used space
+    int availableG = (int)ceil(diskInfo.availableGB); // Round up for available space too
+
+    ImGui::Text("Disk (/):");
+    ImGui::Text("  Total: %d G, Used: %d G, Available: %d G",
+                totalG, usedG, availableG);
+    ImGui::Text("  Usage: %.0f%%", diskInfo.usagePercent);
+    ImGui::ProgressBar(diskInfo.usagePercent / 100.0f, ImVec2(0.0f, 0.0f));
 
     static ImGuiTextFilter filter;
     filter.Draw("Filter processes", 300);
@@ -274,14 +268,15 @@ void memoryProcessesWindow(const char *id, ImVec2 size, ImVec2 position)
                 first_run = false;
             }
 
-            if (ImGui::BeginTable("ProcessesTable", 6, flags, ImVec2(0, ImGui::GetTextLineHeightWithSpacing() * 15)))
+            if (ImGui::BeginTable("ProcessesTable", 7, flags, ImVec2(0, ImGui::GetTextLineHeightWithSpacing() * 15)))
             {
                 ImGui::TableSetupColumn("Select");
                 ImGui::TableSetupColumn("PID");
                 ImGui::TableSetupColumn("Name");
                 ImGui::TableSetupColumn("State");
-                ImGui::TableSetupColumn("CPU Usage (%)");
-                ImGui::TableSetupColumn("Memory Usage (%)");
+                ImGui::TableSetupColumn("CPU %");
+                ImGui::TableSetupColumn("RES");
+                ImGui::TableSetupColumn("MEM %");
                 ImGui::TableHeadersRow();
 
                 // Get total RAM for memory usage calculation
@@ -316,10 +311,15 @@ void memoryProcessesWindow(const char *id, ImVec2 size, ImVec2 position)
                     ImGui::TableNextColumn();
 
                     // Display the stored CPU usage
-                    ImGui::Text("%.2f", process_cpu_usage.count(p.pid) ? process_cpu_usage[p.pid] : 0.0f);
+                    ImGui::Text("%.1f", process_cpu_usage.count(p.pid) ? process_cpu_usage[p.pid] : 0.0f);
 
                     ImGui::TableNextColumn();
-                    ImGui::Text("%.2f", calculateProcessMemoryUsage(p, totalRam));
+                    // Display memory size like 'top' (RES column)
+                    ImGui::Text("%s", formatProcessMemory(p.rss).c_str());
+
+                    ImGui::TableNextColumn();
+                    // Display memory percentage like 'top' (%MEM column)
+                    ImGui::Text("%.1f", calculateProcessMemoryUsage(p, totalRam));
                 }
                 ImGui::EndTable();
             }

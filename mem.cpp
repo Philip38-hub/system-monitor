@@ -286,31 +286,31 @@ DiskInfo getDetailedDiskInfo()
         return diskInfo;
     }
 
-    // Calculate values like 'df' command does
+    // Calculate values exactly like 'df' command does
     unsigned long long totalBlocks = stat.f_blocks;
-    unsigned long long availableBlocks = stat.f_bavail; // Available to non-privileged users
     unsigned long long freeBlocks = stat.f_bfree;       // Free blocks (including reserved)
+    unsigned long long availableBlocks = stat.f_bavail; // Available to non-privileged users
 
-    // Calculate space in bytes
-    unsigned long long totalSpace = totalBlocks * stat.f_bsize;
-    unsigned long long availableSpace = availableBlocks * stat.f_bsize;
-    unsigned long long freeSpace = freeBlocks * stat.f_bsize;
+    // Calculate space in KB (like df -k)
+    unsigned long long totalKB = totalBlocks * (stat.f_bsize / 1024);
+    unsigned long long freeKB = freeBlocks * (stat.f_bsize / 1024);
+    unsigned long long availableKB = availableBlocks * (stat.f_bsize / 1024);
 
-    // Used space calculation: total - free (like df command)
-    unsigned long long usedSpace = totalSpace - freeSpace;
+    // Used space calculation exactly like 'df': used = total - free
+    unsigned long long usedKB = totalKB - freeKB;
 
-    // Convert to GB (using 1000^3 for decimal GB like 'df -h')
-    const double GB_FACTOR = 1000.0 * 1000.0 * 1000.0;
+    // Convert to GB exactly like 'df -h' does (using 1024^2 for binary GB)
+    // Note: df -h uses 1024-based conversion: 1G = 1024^3 bytes = 1024^2 KB
+    const double GB_FACTOR = 1024.0 * 1024.0;
 
-    diskInfo.totalGB = totalSpace / GB_FACTOR;
-    diskInfo.usedGB = usedSpace / GB_FACTOR;
-    diskInfo.availableGB = availableSpace / GB_FACTOR;
+    diskInfo.totalGB = totalKB / GB_FACTOR;
+    diskInfo.usedGB = usedKB / GB_FACTOR;
+    diskInfo.availableGB = availableKB / GB_FACTOR;
 
-    // Calculate percentage: used / (used + available) * 100
-    // This matches how 'df' calculates percentage
-    unsigned long long usableSpace = usedSpace + availableSpace;
+    // Calculate percentage exactly like 'df': used / (used + available) * 100
+    unsigned long long usableSpace = usedKB + availableKB;
     if (usableSpace > 0) {
-        diskInfo.usagePercent = (float)usedSpace / (float)usableSpace * 100.0f;
+        diskInfo.usagePercent = (float)usedKB / (float)usableSpace * 100.0f;
     } else {
         diskInfo.usagePercent = 0.0f;
     }
