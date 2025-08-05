@@ -42,24 +42,73 @@ T getProcValue(const string &path, const string &key)
     return value;
 }
 
-// Function to get physical memory (RAM) usage percentage
+// Function to get detailed memory information matching 'free -h' output
+MemoryInfo getDetailedMemoryInfo()
+{
+    MemoryInfo memInfo = {};
+
+    // Read from /proc/meminfo for more accurate values like 'free' command
+    ifstream file("/proc/meminfo");
+    string line;
+    map<string, long long> memValues;
+
+    while (getline(file, line)) {
+        size_t colonPos = line.find(":");
+        if (colonPos != string::npos) {
+            string key = line.substr(0, colonPos);
+            string valueStr = line.substr(colonPos + 1);
+
+            // Remove whitespace and "kB" suffix
+            valueStr.erase(remove_if(valueStr.begin(), valueStr.end(), ::isspace), valueStr.end());
+            if (valueStr.find("kB") != string::npos) {
+                valueStr = valueStr.substr(0, valueStr.find("kB"));
+            }
+
+            try {
+                memValues[key] = stoll(valueStr);
+            } catch (...) {
+                // Ignore conversion errors
+            }
+        }
+    }
+    file.close();
+
+    // Calculate values in GB (using 1024^3 for binary GB like 'free -h')
+    const double GB_FACTOR = 1024.0 * 1024.0;
+
+    long long totalKB = memValues["MemTotal"];
+    long long freeKB = memValues["MemFree"];
+    long long buffersKB = memValues["Buffers"];
+    long long cachedKB = memValues["Cached"];
+    long long sreclaimableKB = memValues["SReclaimable"];
+    long long availableKB = memValues["MemAvailable"];
+
+
+    memInfo.totalGB = totalKB / GB_FACTOR;
+    memInfo.freeGB = freeKB / GB_FACTOR;
+    memInfo.buffCacheGB = (buffersKB + cachedKB + sreclaimableKB) / GB_FACTOR;
+    memInfo.availableGB = availableKB / GB_FACTOR;
+
+    // Calculate used memory exactly like modern 'free' command does:
+    // used = MemTotal - MemAvailable
+    long long usedKB = totalKB - availableKB;
+    memInfo.usedGB = usedKB / GB_FACTOR;
+
+    // Calculate percentage based on used vs total (like 'free' command)
+    if (totalKB > 0) {
+        memInfo.usagePercent = (float)(usedKB) / (float)(totalKB) * 100.0f;
+    } else {
+        memInfo.usagePercent = 0.0f;
+    }
+
+    return memInfo;
+}
+
+// Function to get physical memory (RAM) usage percentage (for backward compatibility)
 float getMemoryUsage()
 {
-    struct sysinfo memInfo;
-    sysinfo(&memInfo);
-
-    long long totalVirtualMem = memInfo.totalram;
-    // Add other meminfo like swap here
-    totalVirtualMem += memInfo.totalswap;
-    totalVirtualMem *= memInfo.mem_unit;
-
-    long long physMemUsed = memInfo.totalram - memInfo.freeram;
-    physMemUsed *= memInfo.mem_unit;
-
-    if (memInfo.totalram == 0)
-        return 0.0f;
-
-    return (float)physMemUsed / (float)(memInfo.totalram * memInfo.mem_unit) * 100.0f;
+    MemoryInfo memInfo = getDetailedMemoryInfo();
+    return memInfo.usagePercent;
 }
 
 // Function to get all running processes
@@ -166,44 +215,112 @@ vector<Proc> getAllProcesses()
     return processes;
 }
 
-// Function to get virtual memory (SWAP) usage percentage
-float getSwapUsage()
+// Function to get detailed swap information matching 'free -h' output
+SwapInfo getDetailedSwapInfo()
 {
-    struct sysinfo memInfo;
-    sysinfo(&memInfo);
+    SwapInfo swapInfo = {};
 
-    long long totalSwap = memInfo.totalswap;
-    totalSwap *= memInfo.mem_unit;
+    // Read from /proc/meminfo for accurate swap values
+    ifstream file("/proc/meminfo");
+    string line;
+    map<string, long long> memValues;
 
-    long long swapUsed = memInfo.totalswap - memInfo.freeswap;
-    swapUsed *= memInfo.mem_unit;
+    while (getline(file, line)) {
+        size_t colonPos = line.find(":");
+        if (colonPos != string::npos) {
+            string key = line.substr(0, colonPos);
+            string valueStr = line.substr(colonPos + 1);
 
-    if (totalSwap == 0)
-        return 0.0f;
+            // Remove whitespace and "kB" suffix
+            valueStr.erase(remove_if(valueStr.begin(), valueStr.end(), ::isspace), valueStr.end());
+            if (valueStr.find("kB") != string::npos) {
+                valueStr = valueStr.substr(0, valueStr.find("kB"));
+            }
 
-    return (float)swapUsed / (float)totalSwap * 100.0f;
+            try {
+                memValues[key] = stoll(valueStr);
+            } catch (...) {
+                // Ignore conversion errors
+            }
+        }
+    }
+    file.close();
+
+    // Calculate values in GB (using 1024^2 for KB to GB conversion)
+    const double GB_FACTOR = 1024.0 * 1024.0;
+
+    long long totalSwapKB = memValues["SwapTotal"];
+    long long freeSwapKB = memValues["SwapFree"];
+    long long usedSwapKB = totalSwapKB - freeSwapKB;
+
+    swapInfo.totalGB = totalSwapKB / GB_FACTOR;
+    swapInfo.freeGB = freeSwapKB / GB_FACTOR;
+    swapInfo.usedGB = usedSwapKB / GB_FACTOR;
+
+    // Calculate percentage
+    if (totalSwapKB > 0) {
+        swapInfo.usagePercent = (float)(usedSwapKB) / (float)(totalSwapKB) * 100.0f;
+    } else {
+        swapInfo.usagePercent = 0.0f;
+    }
+
+    return swapInfo;
 }
 
-// Function to get disk usage percentage for the root filesystem
-float getDiskUsage()
+// Function to get virtual memory (SWAP) usage percentage (for backward compatibility)
+float getSwapUsage()
 {
+    SwapInfo swapInfo = getDetailedSwapInfo();
+    return swapInfo.usagePercent;
+}
+
+// Function to get detailed disk information matching 'df -h /' output
+DiskInfo getDetailedDiskInfo()
+{
+    DiskInfo diskInfo = {};
+
     struct statvfs stat;
     if (statvfs("/", &stat) != 0)
     {
-        // Error
-        return 0.0f;
+        // Error - return empty info
+        return diskInfo;
     }
 
+    // Calculate values like 'df' command does
     unsigned long long totalBlocks = stat.f_blocks;
-    unsigned long long freeBlocks = stat.f_bfree;
-    // unsigned long long availableBlocks = stat.f_bavail; // Blocks available to non-privileged user
+    unsigned long long availableBlocks = stat.f_bavail; // Available to non-privileged users
+    unsigned long long freeBlocks = stat.f_bfree;       // Free blocks (including reserved)
 
+    // Calculate space in bytes
     unsigned long long totalSpace = totalBlocks * stat.f_bsize;
+    unsigned long long availableSpace = availableBlocks * stat.f_bsize;
     unsigned long long freeSpace = freeBlocks * stat.f_bsize;
+
+    // Used space calculation: total - free (like df command)
     unsigned long long usedSpace = totalSpace - freeSpace;
 
-    if (totalSpace == 0)
-        return 0.0f;
+    // Convert to GB (using 1000^3 for decimal GB like 'df -h')
+    const double GB_FACTOR = 1000.0 * 1000.0 * 1000.0;
 
-    return (float)usedSpace / (float)totalSpace * 100.0f;
+    diskInfo.totalGB = totalSpace / GB_FACTOR;
+    diskInfo.usedGB = usedSpace / GB_FACTOR;
+    diskInfo.availableGB = availableSpace / GB_FACTOR;
+
+    // Calculate percentage: used / (used + available) * 100
+    // This matches how 'df' calculates percentage
+    unsigned long long usableSpace = usedSpace + availableSpace;
+    if (usableSpace > 0) {
+        diskInfo.usagePercent = (float)usedSpace / (float)usableSpace * 100.0f;
+    } else {
+        diskInfo.usagePercent = 0.0f;
+    }
+
+    return diskInfo;
+}
+
+// Function to get disk usage percentage for the root filesystem (for backward compatibility)
+float getDiskUsage()
+{
+    DiskInfo diskInfo = getDetailedDiskInfo();
+    return diskInfo.usagePercent;
 }
